@@ -1,0 +1,206 @@
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  StyleSheet,
+  ActivityIndicator,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useMutation } from '@tanstack/react-query';
+import * as Haptics from 'expo-haptics';
+
+import { chatApi } from '../api/client';
+import { theme } from '../theme';
+import MirrorOrb from '../components/MirrorOrb';
+
+interface Message {
+  id: string;
+  text: string;
+  sender: 'user' | 'mirror';
+  timestamp: Date;
+}
+
+export default function HomeScreen() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputText, setInputText] = useState('');
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  const chatMutation = useMutation({
+    mutationFn: chatApi.sendMessage,
+    onSuccess: (data) => {
+      // Add mirror's response
+      const mirrorMessage: Message = {
+        id: Date.now().toString(),
+        text: data.reply_text,
+        sender: 'mirror',
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, mirrorMessage]);
+      
+      // Success haptic feedback
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+  });
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    if (messages.length > 0) {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  }, [messages]);
+
+  const handleSend = () => {
+    if (!inputText.trim()) return;
+
+    // Add user message
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      text: inputText,
+      sender: 'user',
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, userMessage]);
+
+    // Send to API
+    chatMutation.mutate({
+      user_id: 'user-001', // TODO: Get from auth
+      text: inputText,
+    });
+
+    setInputText('');
+  };
+
+  return (
+    <View style={styles.container}>
+      {/* Small orb in corner */}
+      <View style={styles.orbCorner}>
+        <MirrorOrb isActive={chatMutation.isPending} size={36} />
+      </View>
+
+      {/* Messages */}
+      <ScrollView 
+        ref={scrollViewRef}
+        style={styles.messagesContainer}
+        contentContainerStyle={styles.messagesContent}
+      >
+        {messages.map((message) => (
+          <View
+            key={message.id}
+            style={[
+              styles.messageBubble,
+              message.sender === 'user' ? styles.userBubble : styles.mirrorBubble,
+            ]}
+          >
+            <Text style={styles.messageText}>{message.text}</Text>
+          </View>
+        ))}
+        {chatMutation.isPending && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator color={theme.colors.accent} />
+            <Text style={styles.loadingText}>考えています...</Text>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Input Area */}
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={styles.input}
+          value={inputText}
+          onChangeText={setInputText}
+          placeholder="あなたの想いを話してください..."
+          placeholderTextColor={theme.colors.textSecondary}
+          multiline
+        />
+        <TouchableOpacity
+          style={styles.sendButton}
+          onPress={handleSend}
+          disabled={chatMutation.isPending}
+        >
+          <Ionicons name="send" size={24} color="#fff" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+  },
+  orbCorner: {
+    position: 'absolute',
+    top: theme.spacing.md,
+    right: theme.spacing.md,
+    zIndex: 10,
+    width: 36,
+    height: 36,
+  },
+  messagesContainer: {
+    flex: 1,
+  },
+  messagesContent: {
+    padding: theme.spacing.md,
+    paddingBottom: theme.spacing.xl,
+  },
+  messageBubble: {
+    padding: theme.spacing.md,
+    borderRadius: theme.borderRadius.md,
+    marginBottom: theme.spacing.md,
+    maxWidth: '80%',
+  },
+  userBubble: {
+    backgroundColor: theme.colors.backgroundAlt,
+    alignSelf: 'flex-end',
+  },
+  mirrorBubble: {
+    backgroundColor: '#1a2642',
+    alignSelf: 'flex-start',
+    borderLeftWidth: 3,
+    borderLeftColor: theme.colors.accent,
+  },
+  messageText: {
+    color: theme.colors.text,
+    fontSize: theme.fontSize.md,
+    lineHeight: 24,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: theme.spacing.md,
+  },
+  loadingText: {
+    color: theme.colors.textSecondary,
+    marginLeft: theme.spacing.sm,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    padding: theme.spacing.md,
+    backgroundColor: theme.colors.backgroundAlt,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  input: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+    color: theme.colors.text,
+    padding: theme.spacing.md,
+    borderRadius: theme.borderRadius.md,
+    marginRight: theme.spacing.sm,
+    fontSize: theme.fontSize.md,
+  },
+  sendButton: {
+    backgroundColor: theme.colors.accent,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});
