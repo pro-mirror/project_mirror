@@ -11,14 +11,6 @@ pub async fn create_pool(database_public_url: &str) -> Result<PgPool> {
 
 /// Initialize database schema (create tables if not exist)
 pub async fn initialize_schema(pool: &PgPool) -> Result<()> {
-    // Drop old tables if exist (for schema migration)
-    sqlx::query("DROP TABLE IF EXISTS sub_chunks")
-        .execute(pool)
-        .await?;
-    sqlx::query("DROP TABLE IF EXISTS parent_episodes")
-        .execute(pool)
-        .await?;
-    
     // Create parent_episodes table (conversation sessions)
     sqlx::query(
         r#"
@@ -209,28 +201,6 @@ pub async fn fetch_session_content(
     Ok(sessions)
 }
 
-/// Legacy function: Save a parent episode
-pub async fn save_parent_episode(
-    pool: &PgPool,
-    user_id: &str,
-    content: &str,
-) -> Result<Uuid> {
-    let row: (Uuid,) = sqlx::query_as(
-        r#"
-        INSERT INTO parent_episodes (user_id, summary, turn_count, is_active)
-        VALUES ($1, $2, 1, FALSE)
-        RETURNING id
-        "#
-    )
-    .bind(user_id)
-    .bind(content)
-    .fetch_one(pool)
-    .await?;
-
-    tracing::debug!("Saved parent episode with id: {}", row.0);
-    Ok(row.0)
-}
-
 /// Fetch sub chunks by parent_id
 pub async fn fetch_sub_chunks(
     pool: &PgPool,
@@ -249,31 +219,6 @@ pub async fn fetch_sub_chunks(
     .await?;
 
     Ok(chunks)
-}
-
-/// Legacy: Fetch parent episodes by their IDs
-pub async fn fetch_parent_episodes(
-    pool: &PgPool,
-    parent_ids: &[Uuid],
-) -> Result<Vec<ParentEpisode>> {
-    if parent_ids.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let episodes: Vec<ParentEpisode> = sqlx::query_as(
-        r#"
-        SELECT id, user_id, COALESCE(summary, '') as content, created_at
-        FROM parent_episodes
-        WHERE id = ANY($1)
-        ORDER BY created_at DESC
-        "#
-    )
-    .bind(parent_ids)
-    .fetch_all(pool)
-    .await?;
-
-    tracing::debug!("Fetched {} parent episodes", episodes.len());
-    Ok(episodes)
 }
 
 #[derive(Debug, Clone, sqlx::FromRow)]
@@ -296,33 +241,3 @@ pub struct SessionContent {
     pub content: String,
 }
 
-/// Fetch recent parent episodes for a user
-pub async fn fetch_recent_parent_episodes(
-    pool: &PgPool,
-    user_id: &str,
-    limit: i64,
-) -> Result<Vec<ParentEpisode>> {
-    let episodes: Vec<ParentEpisode> = sqlx::query_as(
-        r#"
-        SELECT id, user_id, content, created_at
-        FROM parent_episodes
-        WHERE user_id = $1
-        ORDER BY created_at DESC
-        LIMIT $2
-        "#
-    )
-    .bind(user_id)
-    .bind(limit)
-    .fetch_all(pool)
-    .await?;
-
-    Ok(episodes)
-}
-
-#[derive(Debug, Clone, sqlx::FromRow)]
-pub struct ParentEpisode {
-    pub id: Uuid,
-    pub user_id: String,
-    pub content: String,
-    pub created_at: chrono::NaiveDateTime,
-}

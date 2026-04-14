@@ -42,25 +42,13 @@ pub struct SubChunkPayload {
     pub user_id: String,
 }
 
-// Legacy payload for backward compatibility (will be phased out)
-#[derive(Debug, Serialize, Deserialize)]
-pub struct EpisodePayload {
-    pub chunk_id: String,
-    pub timestamp: i64,
-    pub speaker: String,
-    pub text: String,
-    pub reply_text: Option<String>,
-    pub emotion_type: String,
-    pub linked_node_ids: Vec<String>,
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExtractedMemory {
-    pub person_name: Option<String>,
+    pub persons: Vec<String>,  // Mentioned persons (names, relationships, pronouns)
+    pub keywords: Vec<String>,  // Related keywords, themes, or topics
     pub emotion_type: String,
     pub intensity: f32,
     pub reason: String,
-    pub concepts: Vec<String>,
 }
 
 // New architecture: Core Value extraction

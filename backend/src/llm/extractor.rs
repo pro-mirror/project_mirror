@@ -11,24 +11,26 @@ use async_openai::{
 use serde::{Deserialize, Serialize};
 use crate::models::{ExtractedMemory, CoreValueExtraction};
 
-const EXTRACTION_PROMPT: &str = r#"以下の会話から、記憶として保存すべき情報を抽出してください。
+const EXTRACTION_PROMPT: &str = r#"以下のユーザーテキストから、記憶として保存すべき情報を抽出してください。
 
 抽出する情報：
-- person_name: 言及された人物の名前（いない場合はnull）
+- persons: 言及された人物の配列（名前、関係性、代名詞を含む。いない場合は空配列）
+  例: ["太郎さん", "母", "上司", "彼女"]
+- keywords: 関連するキーワード、テーマ、トピックの配列
+  例: ["仕事", "家族", "趣味", "健康"]
 - emotion_type: 感情のタイプ（"positive", "negative", "neutral"）
 - intensity: 感情の強さ（0.0〜1.0）
 - reason: その感情の理由や背景
-- concepts: 関連する概念やキーワード（配列）
 
 JSON形式で返してください。"#;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ExtractionResponse {
-    person_name: Option<String>,
+    persons: Vec<String>,
+    keywords: Vec<String>,
     emotion_type: String,
     intensity: f32,
     reason: String,
-    concepts: Vec<String>,
 }
 
 pub async fn extract_memory(
@@ -67,11 +69,11 @@ pub async fn extract_memory(
         .map_err(|e| anyhow::anyhow!("Failed to parse JSON: {} - Content: {}", e, content))?;
 
     Ok(ExtractedMemory {
-        person_name: extracted.person_name,
+        persons: extracted.persons,
+        keywords: extracted.keywords,
         emotion_type: extracted.emotion_type,
         intensity: extracted.intensity,
         reason: extracted.reason,
-        concepts: extracted.concepts,
     })
 }
 

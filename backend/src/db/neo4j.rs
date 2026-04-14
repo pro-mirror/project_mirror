@@ -66,8 +66,8 @@ pub async fn save_memory_graph(
     
     graph.run(episode_query).await?;
     
-    // Create Person node and relationship if person is mentioned
-    if let Some(person_name) = &memory.person_name {
+    // Create Person nodes and relationships for all mentioned persons
+    for person_name in &memory.persons {
         let person_query = query(
             "MERGE (p:Person {name: $name})
              WITH p
@@ -94,20 +94,6 @@ pub async fn save_memory_graph(
         .param("reason", memory.reason.as_str());
         
         graph.run(emotion_query).await?;
-    }
-    
-    // Create Concept nodes and relationships
-    for concept in &memory.concepts {
-        let concept_query = query(
-            "MERGE (c:Concept {name: $name})
-             WITH c
-             MATCH (e:Episode {id: $episode_id})
-             MERGE (e)-[:RELATES_TO]->(c)"
-        )
-        .param("name", concept.as_str())
-        .param("episode_id", episode_id);
-        
-        graph.run(concept_query).await?;
     }
     
     Ok(())

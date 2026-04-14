@@ -6,28 +6,21 @@ use serde::{Serialize, Deserialize};
 pub struct PersonContext {
     pub name: String,
     pub mention_count: i64,
-    pub related_concepts: Vec<String>,
+    pub related_core_values: Vec<String>,
     pub emotions: Vec<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ConceptContext {
-    pub name: String,
-    pub frequency: i64,
-    pub related_emotions: Vec<String>,
 }
 
 /// Get context about a specific person from Neo4j
 pub async fn get_person_context(graph: &Graph, person_name: &str) -> Result<Option<PersonContext>> {
-    // Find person and their related data
+    // Find person and their related data through Episodes
     let query_str = query(
         "MATCH (p:Person {name: $name})
-         OPTIONAL MATCH (e:Episode)-[:MENTIONS]->(p)
-         OPTIONAL MATCH (e)-[:RELATES_TO]->(c:Concept)
+         OPTIONAL MATCH (p)-[:RELATED_TO]->(e:Episode)
+         OPTIONAL MATCH (e)-[:HOLDS]->(cv:CoreValue)
          OPTIONAL MATCH (e)-[:FELT]->(em:Emotion)
          RETURN p.name as name, 
                 count(DISTINCT e) as mention_count,
-                collect(DISTINCT c.name) as concepts,
+                collect(DISTINCT cv.name) as core_values,
                 collect(DISTINCT em.type) as emotions"
     ).param("name", person_name);
     
@@ -38,7 +31,7 @@ pub async fn get_person_context(graph: &Graph, person_name: &str) -> Result<Opti
             row.get::<String>("name"),
             row.get::<i64>("mention_count")
         ) {
-            let concepts = row.get::<Vec<String>>("concepts")
+            let core_values = row.get::<Vec<String>>("core_values")
                 .unwrap_or_default()
                 .into_iter()
                 .filter(|s| !s.is_empty())
@@ -53,7 +46,7 @@ pub async fn get_person_context(graph: &Graph, person_name: &str) -> Result<Opti
             return Ok(Some(PersonContext {
                 name,
                 mention_count: count,
-                related_concepts: concepts,
+                related_core_values: core_values,
                 emotions,
             }));
         }
@@ -62,68 +55,24 @@ pub async fn get_person_context(graph: &Graph, person_name: &str) -> Result<Opti
     Ok(None)
 }
 
-/// Get context about a specific concept from Neo4j
-pub async fn get_concept_context(graph: &Graph, concept_name: &str) -> Result<Option<ConceptContext>> {
-    let query_str = query(
-        "MATCH (c:Concept {name: $name})
-         OPTIONAL MATCH (e:Episode)-[:RELATES_TO]->(c)
-         OPTIONAL MATCH (e)-[:FELT]->(em:Emotion)
-         RETURN c.name as name,
-                count(DISTINCT e) as frequency,
-                collect(DISTINCT em.type) as emotions"
-    ).param("name", concept_name);
-    
-    let mut result = graph.execute(query_str).await?;
-    
-    if let Ok(Some(row)) = result.next().await {
-        if let (Ok(name), Ok(freq)) = (
-            row.get::<String>("name"),
-            row.get::<i64>("frequency")
-        ) {
-            let emotions = row.get::<Vec<String>>("emotions")
-                .unwrap_or_default()
-                .into_iter()
-                .filter(|s| !s.is_empty())
-                .collect();
-            
-            return Ok(Some(ConceptContext {
-                name,
-                frequency: freq,
-                related_emotions: emotions,
-            }));
-        }
-    }
-    
-    Ok(None)
-}
-
-/// Extract person names and concepts from user text
-pub fn extract_entities(text: &str) -> (Vec<String>, Vec<String>) {
-    // Simple extraction - look for common patterns
-    // In production, use NLP or the LLM's entity extraction
+/// Extract person names from user text
+/// Note: This is a simple pattern-based extraction.
+/// In production, use the LLM's entity extraction capability.
+pub fn extract_person_names(text: &str) -> Vec<String> {
     let mut persons = Vec::new();
-    let mut concepts = Vec::new();
     
     // Common Japanese name patterns
     let name_patterns = ["さん", "くん", "ちゃん", "先生", "社長"];
     for word in text.split_whitespace() {
         for pattern in &name_patterns {
             if word.contains(pattern) {
-                persons.push(word.to_string());
+                // Avoid duplicates
+                if !persons.contains(&word.to_string()) {
+                    persons.push(word.to_string());
+                }
             }
         }
     }
     
-    // Common concept keywords
-    let concept_keywords = [
-        "仕事", "家族", "友達", "趣味", "散歩", "公園", 
-        "犬", "猫", "旅行", "食事", "料理", "映画"
-    ];
-    for keyword in &concept_keywords {
-        if text.contains(keyword) {
-            concepts.push(keyword.to_string());
-        }
-    }
-    
-    (persons, concepts)
+    persons
 }
