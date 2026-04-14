@@ -38,3 +38,28 @@ pub async fn initialize_collection(client: &Qdrant) -> Result<()> {
     
     Ok(())
 }
+
+/// Delete and recreate the Qdrant collection (use with caution)
+pub async fn recreate_collection(client: &Qdrant) -> Result<()> {
+    // Delete if exists
+    let collections = client.list_collections().await?;
+    let exists = collections.collections.iter()
+        .any(|c| c.name == COLLECTION_NAME);
+    
+    if exists {
+        client.delete_collection(COLLECTION_NAME).await?;
+        tracing::info!("Deleted Qdrant collection: {}", COLLECTION_NAME);
+    }
+    
+    // Recreate
+    client.create_collection(
+        qdrant_client::qdrant::CreateCollectionBuilder::new(COLLECTION_NAME)
+            .vectors_config(
+                qdrant_client::qdrant::VectorParamsBuilder::new(VECTOR_SIZE, Distance::Cosine)
+            )
+    ).await?;
+    
+    tracing::info!("Recreated Qdrant collection: {}", COLLECTION_NAME);
+    
+    Ok(())
+}

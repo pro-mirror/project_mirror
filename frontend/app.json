@@ -20,7 +20,8 @@
       "adaptiveIcon": {
         "backgroundColor": "#0F172A"
       },
-      "package": "com.projectmirror.app"
+      "package": "com.projectmirror.app",
+      "softwareKeyboardLayoutMode": "pan"
     },
     "web": {
       "bundler": "metro"

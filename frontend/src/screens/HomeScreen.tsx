@@ -7,9 +7,11 @@ import {
   ScrollView,
   StyleSheet,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 
 import { chatApi } from '../api/client';
@@ -27,6 +29,7 @@ export default function HomeScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const scrollViewRef = useRef<ScrollView>(null);
+  const queryClient = useQueryClient();
 
   const chatMutation = useMutation({
     mutationFn: chatApi.sendMessage,
@@ -39,6 +42,9 @@ export default function HomeScreen() {
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, mirrorMessage]);
+      
+      // Invalidate episodes cache so Chronicle screen shows new data
+      queryClient.invalidateQueries({ queryKey: ['episodes'] });
       
       // Success haptic feedback
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -75,11 +81,32 @@ export default function HomeScreen() {
     setInputText('');
   };
 
+  const handleReset = () => {
+    setMessages([]);
+    chatMutation.reset();
+  };
+
   return (
-    <View style={styles.container}>
-      {/* Small orb in corner */}
-      <View style={styles.orbCorner}>
-        <MirrorOrb isActive={chatMutation.isPending} size={36} />
+    <KeyboardAvoidingView 
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
+      {/* Header with orb */}
+      <View style={styles.headerRow}>
+        <View style={styles.orbCorner}>
+          <MirrorOrb isActive={chatMutation.isPending} size={36} />
+        </View>
+        <TouchableOpacity 
+          style={styles.resetButton} 
+          onPress={handleReset}
+        >
+          <Ionicons 
+            name="refresh-outline" 
+            size={24} 
+            color={theme.colors.textSecondary} 
+          />
+        </TouchableOpacity>
       </View>
 
       {/* Messages */}
@@ -87,7 +114,20 @@ export default function HomeScreen() {
         ref={scrollViewRef}
         style={styles.messagesContainer}
         contentContainerStyle={styles.messagesContent}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
+        {/* Welcome message */}
+        {messages.length === 0 && (
+          <View style={styles.welcomeContainer}>
+            <View style={styles.welcomeBubble}>
+              <Text style={styles.welcomeText}>
+                こんにちは。私はあなたのデジタルツイン（分身）です。鏡に向かって話すような感覚で、なんでも語ってくださいね。特にあなたが大切にしていることなどを教えていただけるとうれしいです。
+              </Text>
+            </View>
+          </View>
+        )}
+        
         {messages.map((message) => (
           <View
             key={message.id}
@@ -102,7 +142,7 @@ export default function HomeScreen() {
         {chatMutation.isPending && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator color={theme.colors.accent} />
-            <Text style={styles.loadingText}>考えています...</Text>
+            <Text style={styles.loadingText}>考え中...</Text>
           </View>
         )}
       </ScrollView>
@@ -113,7 +153,7 @@ export default function HomeScreen() {
           style={styles.input}
           value={inputText}
           onChangeText={setInputText}
-          placeholder="あなたの想いを話してください..."
+          placeholder="お話しください..."
           placeholderTextColor={theme.colors.textSecondary}
           multiline
         />
@@ -125,7 +165,7 @@ export default function HomeScreen() {
           <Ionicons name="send" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -134,26 +174,58 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background,
   },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    backgroundColor: theme.colors.backgroundAlt,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
   orbCorner: {
-    position: 'absolute',
-    top: theme.spacing.md,
-    right: theme.spacing.md,
-    zIndex: 10,
     width: 36,
     height: 36,
+  },
+  resetButton: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   messagesContainer: {
     flex: 1,
   },
   messagesContent: {
     padding: theme.spacing.md,
-    paddingBottom: theme.spacing.xl,
+    paddingBottom: 200,
+  },
+  welcomeContainer: {
+    alignItems: 'center',
+    marginTop: theme.spacing.xl,
+    marginBottom: theme.spacing.xl,
+  },
+  welcomeBubble: {
+    backgroundColor: '#1a2642',
+    padding: theme.spacing.lg,
+    borderRadius: theme.borderRadius.md,
+    borderLeftWidth: 3,
+    borderLeftColor: theme.colors.accent,
+    maxWidth: '90%',
+  },
+  welcomeText: {
+    color: theme.colors.text,
+    fontSize: theme.fontSize.md,
+    lineHeight: 24,
+    textAlign: 'left',
   },
   messageBubble: {
     padding: theme.spacing.md,
     borderRadius: theme.borderRadius.md,
     marginBottom: theme.spacing.md,
-    maxWidth: '80%',
+    maxWidth: '85%',
+    flexShrink: 1,
   },
   userBubble: {
     backgroundColor: theme.colors.backgroundAlt,

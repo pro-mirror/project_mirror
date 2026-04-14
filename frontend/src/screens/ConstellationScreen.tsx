@@ -37,6 +37,30 @@ export default function ConstellationScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Explanation */}
+      <View style={styles.explanationBox}>
+        <Text style={styles.explanationTitle}>あなたの記憶のつながり</Text>
+        <Text style={styles.explanationText}>
+          会話で登場した人物、概念、感情がどのように結びついているかを可視化しています。
+        </Text>
+      </View>
+
+      {/* Legend */}
+      <View style={styles.legendContainer}>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendDot, { backgroundColor: theme.colors.accent }]} />
+          <Text style={styles.legendText}>人物</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendDot, { backgroundColor: '#9333ea' }]} />
+          <Text style={styles.legendText}>概念</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendDot, { backgroundColor: '#f59e0b' }]} />
+          <Text style={styles.legendText}>感情</Text>
+        </View>
+      </View>
+
       <View style={styles.graphContainer}>
         <Svg width={width} height={height} style={styles.graph}>
         {/* Draw edges */}
@@ -88,10 +112,12 @@ export default function ConstellationScreen() {
                   node.node_type === 'User'
                     ? theme.colors.accent
                     : node.node_type === 'Person'
-                    ? '#60A5FA'
-                    : '#94A3B8'
+                    ? theme.colors.accent
+                    : node.node_type === 'Concept'
+                    ? '#9333ea'
+                    : '#f59e0b'
                 }
-                opacity={0.8}
+                opacity={0.9}
               />
               <SvgText
                 x={x}
@@ -120,6 +146,43 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background,
     padding: theme.spacing.lg,
+  },
+  explanationBox: {
+    backgroundColor: theme.colors.backgroundAlt,
+    padding: theme.spacing.md,
+    borderRadius: theme.borderRadius.md,
+    marginBottom: theme.spacing.md,
+  },
+  explanationTitle: {
+    fontSize: theme.fontSize.lg,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginBottom: theme.spacing.xs,
+  },
+  explanationText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.textSecondary,
+    lineHeight: 20,
+  },
+  legendContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+  },
+  legendDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  legendText: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.textSecondary,
   },
   graphContainer: {
     flex: 1,

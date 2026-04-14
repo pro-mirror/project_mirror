@@ -37,6 +37,14 @@ export interface GraphData {
   edges: GraphEdge[];
 }
 
+export interface Episode {
+  id: string;
+  timestamp: number;
+  text: string;
+  emotion_type?: string;
+  score?: number;
+}
+
 export const chatApi = {
   sendMessage: async (message: ChatMessage): Promise<ChatResponse> => {
     const response = await api.post<ChatResponse>('/chat/message', message);
@@ -47,6 +55,17 @@ export const chatApi = {
 export const insightsApi = {
   getGraph: async (): Promise<GraphData> => {
     const response = await api.get<GraphData>('/insights/graph');
+    return response.data;
+  },
+};
+
+export const episodesApi = {
+  getEpisodes: async (): Promise<Episode[]> => {
+    const response = await api.get<Episode[]>('/episodes');
+    return response.data;
+  },
+  getEpisodeById: async (id: string): Promise<Episode> => {
+    const response = await api.get<Episode>(`/episodes/${id}`);
     return response.data;
   },
 };

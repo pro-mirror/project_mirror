@@ -11,6 +11,8 @@ pub struct Config {
     pub neo4j_uri: String,
     pub neo4j_user: String,
     pub neo4j_password: String,
+    pub neo4j_database: String,
+    pub database_public_url: String,
 }
 
 impl Config {
@@ -33,6 +35,10 @@ impl Config {
                 .context("NEO4J_USER must be set")?,
             neo4j_password: env::var("NEO4J_PASSWORD")
                 .context("NEO4J_PASSWORD must be set")?,
+            neo4j_database: env::var("NEO4J_DATABASE")
+                .context("NEO4J_DATABASE must be set")?,
+            database_public_url: env::var("DATABASE_PUBLIC_URL")
+                .context("DATABASE_PUBLIC_URL must be set")?
         })
     }
 }

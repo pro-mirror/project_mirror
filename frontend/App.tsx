@@ -7,7 +7,6 @@ import { StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import HomeScreen from './src/screens/HomeScreen';
-import ConstellationScreen from './src/screens/ConstellationScreen';
 import ChronicleScreen from './src/screens/ChronicleScreen';
 import { theme } from './src/theme';
 
@@ -38,8 +37,6 @@ export default function App() {
 
                 if (route.name === 'Home') {
                   iconName = focused ? 'chatbubble' : 'chatbubble-outline';
-                } else if (route.name === 'Constellation') {
-                  iconName = focused ? 'star' : 'star-outline';
                 } else if (route.name === 'Chronicle') {
                   iconName = focused ? 'book' : 'book-outline';
                 } else {
@@ -54,11 +51,6 @@ export default function App() {
               name="Home" 
               component={HomeScreen}
               options={{ title: '対話' }}
-            />
-            <Tab.Screen 
-              name="Constellation" 
-              component={ConstellationScreen}
-              options={{ title: '星座' }}
             />
             <Tab.Screen 
               name="Chronicle" 

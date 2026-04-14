@@ -5,8 +5,10 @@
     "ignoreDeprecations": "6.0",
     "target": "esnext",
     "module": "esnext",
-    "lib": ["esnext"],
-    "moduleResolution": "node",
+    "lib": [
+      "esnext"
+    ],
+    "moduleResolution": "bundler",
     "noEmit": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
@@ -14,17 +16,20 @@
     "esModuleInterop": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": [
+        "src/*"
+      ]
     },
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
   "include": [
     "**/*.ts",
-    "**/*.tsx",
-    ".expo/types/**/*.ts",
-    "expo-env.d.ts"
+    "**/*.tsx"
   ],
   "exclude": [
     "node_modules"
-  ]
+  ],
+  "extends": "expo/tsconfig.base"
 }

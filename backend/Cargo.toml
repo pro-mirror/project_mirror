@@ -17,6 +17,7 @@ serde_json = "1.0"
 # Database
 neo4rs = "0.7"
 qdrant-client = "1.8"
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono"] }
 
 # OpenAI
 async-openai = "0.20"

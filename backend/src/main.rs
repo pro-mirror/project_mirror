@@ -32,9 +32,16 @@ async fn main() -> Result<()> {
     // Initialize database connections
     let neo4j_client = db::neo4j::create_client(&config).await?;
     let qdrant_client = db::qdrant::create_client(&config).await?;
+    let pg_pool = db::postgres::create_pool(&config.database_public_url).await?;
+    
+    // Initialize Neo4j schema
+    db::neo4j::initialize_schema(&neo4j_client).await?;
     
     // Initialize Qdrant collection
     db::qdrant::initialize_collection(&qdrant_client).await?;
+    
+    // Initialize PostgreSQL schema
+    db::postgres::initialize_schema(&pg_pool).await?;
     
     // Initialize OpenAI client
     let openai_client = llm::openai::create_client(&config)?;
@@ -44,6 +51,7 @@ async fn main() -> Result<()> {
         neo4j: neo4j_client,
         qdrant: qdrant_client,
         openai: openai_client,
+        pg_pool,
     };
     
     // Build router
@@ -51,6 +59,8 @@ async fn main() -> Result<()> {
         .route("/health", get(api::health::health_check))
         .route("/api/v1/chat/message", post(api::chat::send_message))
         .route("/api/v1/insights/graph", get(api::insights::get_graph))
+        .route("/api/v1/episodes", get(api::episodes::get_episodes))
+        .route("/api/v1/episodes/:id", get(api::episodes::get_episode_by_id))
         .layer(CorsLayer::permissive())
         .with_state(app_state);
     
