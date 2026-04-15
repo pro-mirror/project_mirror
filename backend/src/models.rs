@@ -11,6 +11,8 @@ pub struct ChatRequest {
 pub struct ChatResponse {
     pub reply_text: String,
     pub emotion_detected: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transcribed_text: Option<String>,
 }
 
 // Graph Models

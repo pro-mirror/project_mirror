@@ -476,7 +476,7 @@ export default function ConstellationScreen() {
           }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {episodeData ? formatDate(episodeData.timestamp) : '会話履歴'}
+                {episodeData ? formatDate(episodeData.timestamp) : 'エピソード'}
               </Text>
               <TouchableOpacity onPress={closeModal}>
                 <Text style={styles.closeButton}>✕</Text>

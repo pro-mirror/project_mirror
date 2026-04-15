@@ -3,14 +3,16 @@ use axum::{
     http::StatusCode,
     Json,
 };
+use axum::extract::Multipart;
 use crate::api::AppState;
 use crate::models::{ChatRequest, ChatResponse};
 use crate::llm::prompts::SYSTEM_PROMPT;
-use crate::llm::{extractor, embedding};
+use crate::llm::{extractor, embedding, openai};
 use crate::db::{vector, neo4j, neo4j_context, postgres};
 use tracing::{info, error};
 use uuid::Uuid;
 use std::collections::HashSet;
+use std::io::Write;
 
 pub async fn send_message(
     State(state): State<AppState>,
@@ -162,6 +164,7 @@ pub async fn send_message(
     Ok(Json(ChatResponse {
         reply_text: reply,
         emotion_detected: "neutral".to_string(),
+        transcribed_text: None,
     }))
 }
 
@@ -270,4 +273,106 @@ async fn save_memory(
     }
     
     Ok(())
+}
+
+pub async fn send_voice_message(
+    State(state): State<AppState>,
+    mut multipart: Multipart,
+) -> Result<Json<ChatResponse>, StatusCode> {
+    info!("Received voice message");
+    
+    let mut user_id: Option<String> = None;
+    let mut audio_data: Option<Vec<u8>> = None;
+    let mut filename: Option<String> = None;
+    
+    // Parse multipart form data
+    while let Some(field) = multipart.next_field().await.map_err(|e| {
+        error!("Failed to get next field: {}", e);
+        StatusCode::BAD_REQUEST
+    })? {
+        let name = field.name().unwrap_or("").to_string();
+        
+        match name.as_str() {
+            "user_id" => {
+                user_id = Some(field.text().await.map_err(|e| {
+                    error!("Failed to read user_id: {}", e);
+                    StatusCode::BAD_REQUEST
+                })?);
+            }
+            "audio" => {
+                filename = field.file_name().map(|s| s.to_string());
+                audio_data = Some(field.bytes().await.map_err(|e| {
+                    error!("Failed to read audio data: {}", e);
+                    StatusCode::BAD_REQUEST
+                })?.to_vec());
+            }
+            _ => {
+                info!("Unknown field: {}", name);
+            }
+        }
+    }
+    
+    let user_id = user_id.ok_or_else(|| {
+        error!("Missing user_id");
+        StatusCode::BAD_REQUEST
+    })?;
+    
+    let audio_data = audio_data.ok_or_else(|| {
+        error!("Missing audio data");
+        StatusCode::BAD_REQUEST
+    })?;
+    
+    info!("Received audio from user: {} (size: {} bytes)", user_id, audio_data.len());
+    
+    // Save audio to temporary file
+    let temp_dir = std::env::temp_dir();
+    let file_ext = filename
+        .and_then(|f| f.split('.').last().map(|s| s.to_string()))
+        .unwrap_or_else(|| "m4a".to_string());
+    let temp_path = temp_dir.join(format!("voice_{}.{}", Uuid::new_v4(), file_ext));
+    
+    {
+        let mut file = std::fs::File::create(&temp_path).map_err(|e| {
+            error!("Failed to create temp file: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+        
+        file.write_all(&audio_data).map_err(|e| {
+            error!("Failed to write audio data: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    }
+    
+    info!("Saved audio to temp file: {:?}", temp_path);
+    
+    // Transcribe audio using OpenAI Whisper
+    let transcribed_text = openai::transcribe_audio(&state.openai, temp_path.clone())
+        .await
+        .map_err(|e| {
+            error!("Failed to transcribe audio: {}", e);
+            // Clean up temp file
+            let _ = std::fs::remove_file(&temp_path);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    
+    info!("Transcribed text: {}", transcribed_text);
+    
+    // Clean up temp file
+    if let Err(e) = std::fs::remove_file(&temp_path) {
+        error!("Failed to remove temp file: {}", e);
+    }
+    
+    // Create ChatRequest from transcribed text
+    let chat_request = ChatRequest {
+        user_id,
+        text: transcribed_text.clone(),
+    };
+    
+    // Use existing send_message logic
+    let mut response = send_message(State(state), Json(chat_request)).await?;
+    
+    // Add transcribed text to response
+    response.0.transcribed_text = Some(transcribed_text);
+    
+    Ok(response)
 }

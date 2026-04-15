@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
+import { Audio } from 'expo-av';
 
 import { chatApi } from '../api/client';
 import { theme } from '../theme';
@@ -28,8 +29,11 @@ interface Message {
 export default function HomeScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const queryClient = useQueryClient();
+  const hapticsInterval = useRef<NodeJS.Timeout | null>(null);
 
   const chatMutation = useMutation({
     mutationFn: chatApi.sendMessage,
@@ -54,6 +58,49 @@ export default function HomeScreen() {
     },
   });
 
+  const voiceMutation = useMutation({
+    mutationFn: chatApi.sendVoiceMessage,
+    onSuccess: (data) => {
+      // Add user's transcribed message if available
+      if (data.transcribed_text) {
+        const userMessage: Message = {
+          id: Date.now().toString(),
+          text: data.transcribed_text,
+          sender: 'user',
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, userMessage]);
+      }
+      
+      // Add mirror's response
+      const mirrorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: data.reply_text,
+        sender: 'mirror',
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, mirrorMessage]);
+      
+      // Invalidate caches
+      queryClient.invalidateQueries({ queryKey: ['episodes'] });
+      queryClient.invalidateQueries({ queryKey: ['core-value-graph'] });
+      
+      // Success haptic feedback (double pulse - heart beat)
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+    onError: (error) => {
+      console.error('Failed to send voice message:', error);
+      // Show error message
+      const errorMessage: Message = {
+        id: Date.now().toString(),
+        text: '音声の送信に失敗しました。テキストで入力してみてください。',
+        sender: 'mirror',
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    },
+  });
+
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     if (messages.length > 0) {
@@ -62,6 +109,91 @@ export default function HomeScreen() {
       }, 100);
     }
   }, [messages]);
+
+  // Cleanup haptics on unmount
+  useEffect(() => {
+    return () => {
+      if (hapticsInterval.current) {
+        clearInterval(hapticsInterval.current);
+      }
+    };
+  }, []);
+
+  const startRecording = async () => {
+    try {
+      // Request permissions
+      const permission = await Audio.requestPermissionsAsync();
+      if (!permission.granted) {
+        console.log('Permission to access audio denied');
+        return;
+      }
+
+      // Set audio mode
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      // Start recording
+      const { recording: newRecording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      setRecording(newRecording);
+      setIsRecording(true);
+
+      // Start haptic feedback (gentle pulse every 1.5 seconds)
+      hapticsInterval.current = setInterval(() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }, 1500);
+
+    } catch (error) {
+      console.error('Failed to start recording:', error);
+    }
+  };
+
+  const stopRecording = async () => {
+    if (!recording) return;
+
+    try {
+      // Stop haptic feedback
+      if (hapticsInterval.current) {
+        clearInterval(hapticsInterval.current);
+        hapticsInterval.current = null;
+      }
+
+      // Stop recording
+      await recording.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+      });
+
+      const uri = recording.getURI();
+      setRecording(null);
+      setIsRecording(false);
+
+      // Send audio to backend
+      if (uri) {
+        console.log('Recording saved to:', uri);
+        
+        // Send to API (response will add user message with transcribed text)
+        voiceMutation.mutate({
+          user_id: 'user-001', // TODO: Get from auth
+          audio_uri: uri,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to stop recording:', error);
+      setIsRecording(false);
+    }
+  };
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
 
   const handleSend = () => {
     if (!inputText.trim()) return;
@@ -95,10 +227,30 @@ export default function HomeScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
+      {/* Voice mode overlay */}
+      {isRecording && (
+        <View style={styles.voiceModeOverlay}>
+          <View style={styles.voiceModeContent}>
+            <MirrorOrb mode="waveform" size={200} />
+            <Text style={styles.voiceModeText}>お話しください...</Text>
+            <TouchableOpacity 
+              style={styles.stopButton}
+              onPress={stopRecording}
+            >
+              <Ionicons name="stop-circle" size={64} color={theme.colors.accent} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       {/* Header with orb */}
       <View style={styles.headerRow}>
         <View style={styles.orbCorner}>
-          <MirrorOrb isActive={chatMutation.isPending} size={36} />
+          <MirrorOrb 
+            isActive={chatMutation.isPending || voiceMutation.isPending} 
+            mode={isRecording ? 'waveform' : 'orb'}
+            size={36} 
+          />
         </View>
         <TouchableOpacity 
           style={styles.resetButton} 
@@ -142,7 +294,7 @@ export default function HomeScreen() {
             <Text style={styles.messageText}>{message.text}</Text>
           </View>
         ))}
-        {chatMutation.isPending && (
+        {(chatMutation.isPending || voiceMutation.isPending) && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator color={theme.colors.accent} />
             <Text style={styles.loadingText}>考え中...</Text>
@@ -159,11 +311,22 @@ export default function HomeScreen() {
           placeholder="お話しください..."
           placeholderTextColor={theme.colors.textSecondary}
           multiline
+          editable={!isRecording}
         />
+        <TouchableOpacity
+          style={[styles.micButton, isRecording && styles.micButtonActive]}
+          onPress={toggleRecording}
+        >
+          <Ionicons 
+            name={isRecording ? "stop" : "mic"} 
+            size={28} 
+            color="#fff" 
+          />
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.sendButton}
           onPress={handleSend}
-          disabled={chatMutation.isPending}
+          disabled={chatMutation.isPending || voiceMutation.isPending || isRecording}
         >
           <Ionicons name="send" size={24} color="#fff" />
         </TouchableOpacity>
@@ -260,6 +423,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.backgroundAlt,
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
+    alignItems: 'center',
   },
   input: {
     flex: 1,
@@ -270,6 +434,18 @@ const styles = StyleSheet.create({
     marginRight: theme.spacing.sm,
     fontSize: theme.fontSize.md,
   },
+  micButton: {
+    backgroundColor: '#6366F1',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: theme.spacing.sm,
+  },
+  micButtonActive: {
+    backgroundColor: '#EF4444',
+  },
   sendButton: {
     backgroundColor: theme.colors.accent,
     width: 48,
@@ -277,5 +453,28 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  voiceModeOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+    zIndex: 1000,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  voiceModeContent: {
+    alignItems: 'center',
+  },
+  voiceModeText: {
+    color: theme.colors.text,
+    fontSize: theme.fontSize.xl,
+    marginTop: theme.spacing.xl,
+    marginBottom: theme.spacing.xl,
+  },
+  stopButton: {
+    marginTop: theme.spacing.lg,
   },
 });

@@ -14,9 +14,15 @@ export interface ChatMessage {
   text: string;
 }
 
+export interface VoiceMessage {
+  user_id: string;
+  audio_uri: string;
+}
+
 export interface ChatResponse {
   reply_text: string;
   emotion_detected: string;
+  transcribed_text?: string;
 }
 
 export interface GraphNode {
@@ -78,6 +84,25 @@ export interface Episode {
 export const chatApi = {
   sendMessage: async (message: ChatMessage): Promise<ChatResponse> => {
     const response = await api.post<ChatResponse>('/chat/message', message);
+    return response.data;
+  },
+  sendVoiceMessage: async (voiceMessage: VoiceMessage): Promise<ChatResponse> => {
+    const formData = new FormData();
+    formData.append('user_id', voiceMessage.user_id);
+    
+    // Append audio file
+    const filename = voiceMessage.audio_uri.split('/').pop() || 'recording.m4a';
+    formData.append('audio', {
+      uri: voiceMessage.audio_uri,
+      type: 'audio/m4a',
+      name: filename,
+    } as any);
+
+    const response = await api.post<ChatResponse>('/chat/voice', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
     return response.data;
   },
 };
