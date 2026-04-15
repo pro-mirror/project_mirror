@@ -34,12 +34,6 @@ pub async fn send_message(
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
     
-    // Log all similarity scores for debugging
-    info!("=== Qdrant Search Results ===");
-    for (i, (parent_id, score)) in qdrant_results.iter().enumerate() {
-        info!("  Result {}: parent_id={}, score={:.4}", i + 1, parent_id, score);
-    }
-    
     // Filter by similarity threshold 
     const SIMILARITY_THRESHOLD: f32 = 0.3;
     let filtered_results: Vec<(String, f32)> = qdrant_results
@@ -189,48 +183,25 @@ async fn generate_mirror_response(
     
     // Inject core values dynamically
     if !core_values.is_empty() {
-        tracing::info!("=== Injected Core Values ({}) ===", core_values.len());
-        for (value_name, weight, ctx) in core_values {
-            tracing::info!("  - {} (weight: {:.2}): {}", value_name, weight, ctx);
-        }
-        
+        info!("Injecting {} core values into context", core_values.len());
         context.push_str("\n\n【現在焦点を当てているコアバリュー】\n");
         for (value_name, weight, ctx) in core_values {
             context.push_str(&format!("- **{}** (重要度: {:.2})\n", value_name, weight));
             context.push_str(&format!("  背景: {}\n\n", ctx));
         }
-    } else {
-        tracing::info!("=== No Core Values Found ===");
     }
     
     // Add parent episode contexts (rich, full conversations)
     if !session_contents.is_empty() {
         let max_sessions = 5; // Limit to top 5 most relevant sessions
         let sessions_to_inject = session_contents.iter().take(max_sessions);
-        
-        tracing::info!("=== Injected Session Contexts ({}/{}) ===", 
-            sessions_to_inject.clone().count(), session_contents.len());
-        for (i, session) in sessions_to_inject.clone().enumerate() {
-            let preview: String = session.content.chars().take(100).collect();
-            tracing::info!("  Session {}: {} turns, preview: {}...", i + 1, session.turn_count, preview);
-        }
+        info!("Injecting {} session contexts", sessions_to_inject.clone().count());
         
         context.push_str("\n\n【現在の話題の対象に関する過去の記憶】\n");
         for session in sessions_to_inject {
             context.push_str(&format!("- セッション（{}ターン）:\n{}\n\n", session.turn_count, session.content));
         }
-    } else {
-        tracing::info!("=== No Session Contexts Found ===");
     }
-    
-    tracing::info!("=== User Query ===\n{}", user_text);
-    tracing::info!("=== Total Context Length: {} chars ===", context.len());
-    
-    // Debug: Output full prompt for inspection
-    tracing::info!("========================================");
-    tracing::info!("=== FULL SYSTEM PROMPT (for debugging) ===");
-    tracing::info!("{}", context);
-    tracing::info!("========================================");
     
     let messages = vec![
         ChatCompletionRequestMessage::System(

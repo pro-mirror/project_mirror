@@ -34,18 +34,6 @@ export default function ConstellationScreen() {
     refetchOnWindowFocus: true, // Refetch when window/tab gains focus
   });
 
-  // Debug logging
-  React.useEffect(() => {
-    if (data) {
-      console.log('Graph data loaded:', {
-        nodesCount: data.nodes.length,
-        edgesCount: data.edges.length,
-        coreValues: data.nodes.filter(n => n.node_type === 'CoreValue').length,
-        episodes: data.nodes.filter(n => n.node_type === 'Episode').length,
-      });
-    }
-  }, [data]);
-
   React.useEffect(() => {
     if (error) {
       console.error('Graph error:', error);
@@ -65,29 +53,6 @@ export default function ConstellationScreen() {
     enabled: !!selectedCoreValue,
     retry: false,
   });
-
-  // Debug episode data
-  React.useEffect(() => {
-    if (episodeData) {
-      console.log('Episode data loaded:', {
-        parent_id: episodeData.parent_id,
-        messages: episodeData.messages.length,
-        core_values: episodeData.core_values.length,
-        persons: episodeData.persons.length,
-      });
-    }
-  }, [episodeData]);
-
-  // Debug core value data
-  React.useEffect(() => {
-    if (coreValueData) {
-      console.log('CoreValue data loaded:', {
-        value_name: coreValueData.value_name,
-        total_weight: coreValueData.total_weight,
-        contexts: coreValueData.contexts.length,
-      });
-    }
-  }, [coreValueData]);
 
   // Show modal with fade animation
   const showModal = () => {
@@ -213,13 +178,10 @@ export default function ConstellationScreen() {
   });
 
   const handleNodePress = (node: GraphNode) => {
-    console.log('Node pressed:', node.node_type, node.label, node.parent_id);
     if (node.node_type === 'Episode' && node.parent_id) {
-      console.log('Opening episode:', node.parent_id);
       setSelectedEpisode(node.parent_id);
       setSelectedCoreValue(null);
     } else if (node.node_type === 'CoreValue') {
-      console.log('Opening core value:', node.label);
       setSelectedCoreValue(node.label);
       setSelectedEpisode(null);
     }
