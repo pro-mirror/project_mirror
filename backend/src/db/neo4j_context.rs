@@ -2,6 +2,8 @@ use anyhow::Result;
 use neo4rs::{Graph, query};
 use serde::{Serialize, Deserialize};
 
+/// Future use: Person detail view
+#[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PersonContext {
     pub name: String,
@@ -11,6 +13,8 @@ pub struct PersonContext {
 }
 
 /// Get context about a specific person from Neo4j
+/// Future use: Person detail API endpoint
+#[allow(dead_code)]
 pub async fn get_person_context(graph: &Graph, person_name: &str) -> Result<Option<PersonContext>> {
     // Find person and their related data through Episodes
     let query_str = query(

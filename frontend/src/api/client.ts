@@ -23,6 +23,9 @@ export interface GraphNode {
   id: string;
   label: string;
   node_type: string;
+  parent_id?: string;
+  timestamp?: number;
+  total_weight?: number;
 }
 
 export interface GraphEdge {
@@ -35,6 +38,33 @@ export interface GraphEdge {
 export interface GraphData {
   nodes: GraphNode[];
   edges: GraphEdge[];
+}
+
+export interface CoreValueContext {
+  episode_parent_id: string;
+  context: string;
+  weight: number;
+  timestamp: number;
+}
+
+export interface CoreValueDetail {
+  value_name: string;
+  total_weight: number;
+  contexts: CoreValueContext[];
+}
+
+export interface ConversationMessage {
+  role: string;
+  content: string;
+  timestamp: number;
+}
+
+export interface EpisodeDetail {
+  parent_id: string;
+  timestamp: number;
+  core_values: string[];
+  persons: string[];
+  messages: ConversationMessage[];
 }
 
 export interface Episode {
@@ -57,6 +87,14 @@ export const insightsApi = {
     const response = await api.get<GraphData>('/insights/graph');
     return response.data;
   },
+  getCoreValueGraph: async (): Promise<GraphData> => {
+    const response = await api.get<GraphData>('/insights/core-value-graph');
+    return response.data;
+  },
+  getCoreValueDetail: async (valueName: string): Promise<CoreValueDetail> => {
+    const response = await api.get<CoreValueDetail>(`/insights/core-values/${encodeURIComponent(valueName)}`);
+    return response.data;
+  },
 };
 
 export const episodesApi = {
@@ -66,6 +104,10 @@ export const episodesApi = {
   },
   getEpisodeById: async (id: string): Promise<Episode> => {
     const response = await api.get<Episode>(`/episodes/${id}`);
+    return response.data;
+  },
+  getEpisodeByParentId: async (parentId: string): Promise<EpisodeDetail> => {
+    const response = await api.get<EpisodeDetail>(`/episodes/parent/${parentId}`);
     return response.data;
   },
 };

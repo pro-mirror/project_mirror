@@ -19,6 +19,12 @@ pub struct GraphNode {
     pub id: String,
     pub label: String,
     pub node_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,  // For Episode nodes
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timestamp: Option<i64>,  // For Episode nodes
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_weight: Option<f32>,  // For CoreValue nodes
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -33,6 +39,39 @@ pub struct GraphEdge {
 pub struct GraphResponse {
     pub nodes: Vec<GraphNode>,
     pub edges: Vec<GraphEdge>,
+}
+
+// CoreValue Detail
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CoreValueContext {
+    pub episode_parent_id: String,
+    pub context: String,
+    pub weight: f32,
+    pub timestamp: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CoreValueDetail {
+    pub value_name: String,
+    pub total_weight: f32,
+    pub contexts: Vec<CoreValueContext>,
+}
+
+// Episode Detail
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ConversationMessage {
+    pub role: String,  // "user" or "assistant"
+    pub content: String,
+    pub timestamp: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EpisodeDetail {
+    pub parent_id: String,
+    pub timestamp: i64,
+    pub core_values: Vec<String>,
+    pub persons: Vec<String>,
+    pub messages: Vec<ConversationMessage>,
 }
 
 // Qdrant Payload (simplified for parent-document retrieval)

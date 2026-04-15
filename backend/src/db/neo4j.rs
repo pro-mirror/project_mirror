@@ -1,7 +1,7 @@
 use anyhow::Result;
 use neo4rs::{Graph, ConfigBuilder, query};
 use crate::config::Config;
-use crate::models::{ExtractedMemory, CoreValueExtraction};
+use crate::models::CoreValueExtraction;
 use uuid::Uuid;
 
 pub async fn create_client(config: &Config) -> Result<Graph> {
@@ -45,60 +45,6 @@ pub async fn initialize_schema(graph: &Graph) -> Result<()> {
     Ok(())
 }
 
-/// Save extracted memory to Neo4j as a graph structure
-pub async fn save_memory_graph(
-    graph: &Graph,
-    episode_id: &str,
-    user_id: &str,
-    user_text: &str,
-    memory: &ExtractedMemory,
-    timestamp: i64,
-) -> Result<()> {
-    // Create Episode node
-    let episode_query = query(
-        "MERGE (e:Episode {id: $episode_id})
-         SET e.text = $text, e.timestamp = $timestamp, e.user_id = $user_id"
-    )
-    .param("episode_id", episode_id)
-    .param("text", user_text)
-    .param("timestamp", timestamp)
-    .param("user_id", user_id);
-    
-    graph.run(episode_query).await?;
-    
-    // Create Person nodes and relationships for all mentioned persons
-    for person_name in &memory.persons {
-        let person_query = query(
-            "MERGE (p:Person {name: $name})
-             WITH p
-             MATCH (e:Episode {id: $episode_id})
-             MERGE (e)-[:MENTIONS]->(p)"
-        )
-        .param("name", person_name.as_str())
-        .param("episode_id", episode_id);
-        
-        graph.run(person_query).await?;
-    }
-    
-    // Create emotion relationship
-    if !memory.emotion_type.is_empty() {
-        let emotion_query = query(
-            "MATCH (e:Episode {id: $episode_id})
-             MERGE (emotion:Emotion {type: $emotion_type})
-             MERGE (e)-[r:FELT]->(emotion)
-             SET r.intensity = $intensity, r.reason = $reason"
-        )
-        .param("episode_id", episode_id)
-        .param("emotion_type", memory.emotion_type.as_str())
-        .param("intensity", memory.intensity)
-        .param("reason", memory.reason.as_str());
-        
-        graph.run(emotion_query).await?;
-    }
-    
-    Ok(())
-}
-
 /// New Architecture: Save core values to graph
 /// Creates Episode-centric relationships:
 /// User -[:HAS]-> Episode -[:HOLDS]-> CoreValue
@@ -119,11 +65,11 @@ pub async fn save_core_values(
     // Create Episode node
     let episode_query = query(
         "MERGE (e:Episode {parent_id: $parent_id})
-         ON CREATE SET e.created_at = timestamp()
+         ON CREATE SET e.created_at = datetime({timezone: 'Asia/Tokyo'})
          WITH e
          MATCH (u:User {id: $user_id})
          MERGE (u)-[r:HAS]->(e)
-         ON CREATE SET r.created_at = timestamp()"
+         ON CREATE SET r.created_at = datetime({timezone: 'Asia/Tokyo'})"
     )
     .param("parent_id", parent_id.to_string())
     .param("user_id", user_id);
@@ -134,16 +80,16 @@ pub async fn save_core_values(
         let value_query = query(
             "MATCH (e:Episode {parent_id: $parent_id})
              MERGE (cv:CoreValue {name: $value_name})
-             ON CREATE SET cv.first_discovered = timestamp(), cv.total_weight = 0.0
+             ON CREATE SET cv.first_discovered = datetime({timezone: 'Asia/Tokyo'}), cv.total_weight = 0.0
              MERGE (e)-[r:HOLDS]->(cv)
              ON CREATE SET r.weight = $weight, 
                            r.context = $context, 
-                           r.created_at = timestamp()
+                           r.created_at = datetime({timezone: 'Asia/Tokyo'})
              ON MATCH SET r.weight = r.weight + $weight, 
                           r.latest_context = $context, 
-                          r.updated_at = timestamp()
+                          r.updated_at = datetime({timezone: 'Asia/Tokyo'})
              SET cv.total_weight = cv.total_weight + $weight,
-                 cv.last_mentioned = timestamp()"
+                 cv.last_mentioned = datetime({timezone: 'Asia/Tokyo'})"
         )
         .param("parent_id", parent_id.to_string())
         .param("value_name", value.value_name.as_str())
@@ -157,14 +103,14 @@ pub async fn save_core_values(
             let person_query = query(
                 "MATCH (e:Episode {parent_id: $parent_id})
                  MERGE (p:Person {name: $person_name})
-                 ON CREATE SET p.first_mentioned = timestamp()
+                 ON CREATE SET p.first_mentioned = datetime({timezone: 'Asia/Tokyo'})
                  MERGE (p)-[r:RELATED_TO]->(e)
                  ON CREATE SET r.relationship_context = $context,
-                               r.first_mentioned_at = timestamp(),
+                               r.first_mentioned_at = datetime({timezone: 'Asia/Tokyo'}),
                                r.mention_count = 1
                  ON MATCH SET r.mention_count = r.mention_count + 1,
-                              r.last_mentioned_at = timestamp()
-                 SET p.last_mentioned = timestamp()"
+                              r.last_mentioned_at = datetime({timezone: 'Asia/Tokyo'})
+                 SET p.last_mentioned = datetime({timezone: 'Asia/Tokyo'})"
             )
             .param("parent_id", parent_id.to_string())
             .param("person_name", person_name.as_str())

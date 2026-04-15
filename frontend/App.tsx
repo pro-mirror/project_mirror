@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import HomeScreen from './src/screens/HomeScreen';
 import ChronicleScreen from './src/screens/ChronicleScreen';
+import ConstellationScreen from './src/screens/ConstellationScreen';
 import { theme } from './src/theme';
 
 const Tab = createBottomTabNavigator();
@@ -39,6 +40,8 @@ export default function App() {
                   iconName = focused ? 'chatbubble' : 'chatbubble-outline';
                 } else if (route.name === 'Chronicle') {
                   iconName = focused ? 'book' : 'book-outline';
+                } else if (route.name === 'Constellation') {
+                  iconName = focused ? 'git-network' : 'git-network-outline';
                 } else {
                   iconName = 'help-outline';
                 }
@@ -55,7 +58,12 @@ export default function App() {
             <Tab.Screen 
               name="Chronicle" 
               component={ChronicleScreen}
-              options={{ title: '記憶' }}
+              options={{ title: 'ログ' }}
+            />
+            <Tab.Screen 
+              name="Constellation" 
+              component={ConstellationScreen}
+              options={{ title: '分析' }}
             />
           </Tab.Navigator>
         </NavigationContainer>

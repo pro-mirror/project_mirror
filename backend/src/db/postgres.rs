@@ -171,11 +171,8 @@ pub async fn fetch_session_content(
 
     let sessions: Vec<SessionContent> = sqlx::query_as(
         r#"
-        SELECT 
-            pe.id,
-            pe.user_id,
+        SELECT
             pe.turn_count,
-            pe.created_at,
             COALESCE(
                 STRING_AGG(
                     '[' || TO_CHAR(sc.created_at, 'YYYY-MM-DD HH24:MI:SS') || '] ' ||
@@ -189,7 +186,7 @@ pub async fn fetch_session_content(
         FROM parent_episodes pe
         LEFT JOIN sub_chunks sc ON pe.id = sc.parent_id
         WHERE pe.id = ANY($1)
-        GROUP BY pe.id, pe.user_id, pe.turn_count, pe.created_at
+        GROUP BY pe.id, pe.turn_count, pe.created_at
         ORDER BY pe.created_at DESC
         "#
     )
@@ -201,43 +198,9 @@ pub async fn fetch_session_content(
     Ok(sessions)
 }
 
-/// Fetch sub chunks by parent_id
-pub async fn fetch_sub_chunks(
-    pool: &PgPool,
-    parent_id: &Uuid,
-) -> Result<Vec<SubChunk>> {
-    let chunks: Vec<SubChunk> = sqlx::query_as(
-        r#"
-        SELECT id, parent_id, user_id, user_text, reply_text, turn_index, created_at
-        FROM sub_chunks
-        WHERE parent_id = $1
-        ORDER BY turn_index ASC
-        "#
-    )
-    .bind(parent_id)
-    .fetch_all(pool)
-    .await?;
-
-    Ok(chunks)
-}
-
-#[derive(Debug, Clone, sqlx::FromRow)]
-pub struct SubChunk {
-    pub id: Uuid,
-    pub parent_id: Uuid,
-    pub user_id: String,
-    pub user_text: String,
-    pub reply_text: String,
-    pub turn_index: i32,
-    pub created_at: chrono::NaiveDateTime,
-}
-
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct SessionContent {
-    pub id: Uuid,
-    pub user_id: String,
     pub turn_count: i32,
-    pub created_at: chrono::NaiveDateTime,
     pub content: String,
 }
 

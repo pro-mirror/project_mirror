@@ -40,6 +40,8 @@ pub async fn initialize_collection(client: &Qdrant) -> Result<()> {
 }
 
 /// Delete and recreate the Qdrant collection (use with caution)
+/// Development utility: not used in production
+#[allow(dead_code)]
 pub async fn recreate_collection(client: &Qdrant) -> Result<()> {
     // Delete if exists
     let collections = client.list_collections().await?;

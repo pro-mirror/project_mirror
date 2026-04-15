@@ -46,6 +46,9 @@ export default function HomeScreen() {
       // Invalidate episodes cache so Chronicle screen shows new data
       queryClient.invalidateQueries({ queryKey: ['episodes'] });
       
+      // Invalidate graph cache so Constellation screen shows new data
+      queryClient.invalidateQueries({ queryKey: ['core-value-graph'] });
+      
       // Success haptic feedback
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },

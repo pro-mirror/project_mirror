@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 
 use crate::api::AppState;
-use crate::db::postgres;
+use crate::models::EpisodeDetail;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EpisodeResponse {
@@ -93,6 +93,99 @@ pub async fn get_episode_by_id(
         Ok(None) => Err(StatusCode::NOT_FOUND),
         Err(e) => {
             tracing::error!("Failed to fetch episode: {}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+/// Get episode detail by parent_id with full conversation history
+pub async fn get_episode_by_parent_id(
+    State(state): State<AppState>,
+    axum::extract::Path(parent_id): axum::extract::Path<String>,
+) -> Result<Json<EpisodeDetail>, StatusCode> {
+    info!("Fetching episode detail for parent_id: {}", parent_id);
+    
+    // Parse parent_id as UUID
+    let parent_uuid = match uuid::Uuid::parse_str(&parent_id) {
+        Ok(uuid) => uuid,
+        Err(_) => return Err(StatusCode::BAD_REQUEST),
+    };
+    
+    // Get all sub-chunks with this parent_id from PostgreSQL
+    match sqlx::query_as::<_, (String, String, i64)>(
+        r#"
+        SELECT 
+            sc.user_text,
+            sc.reply_text,
+            EXTRACT(EPOCH FROM sc.created_at)::bigint as timestamp
+        FROM sub_chunks sc
+        WHERE sc.parent_id = $1
+        ORDER BY sc.created_at ASC
+        "#
+    )
+    .bind(parent_uuid)
+    .fetch_all(&state.pg_pool)
+    .await
+    {
+        Ok(results) => {
+            if results.is_empty() {
+                return Err(StatusCode::NOT_FOUND);
+            }
+            
+            let mut messages = Vec::new();
+            let first_timestamp = results.first().map(|r| r.2).unwrap_or(0);
+            
+            // Convert to conversation messages
+            for (user_text, reply_text, timestamp) in results {
+                messages.push(crate::models::ConversationMessage {
+                    role: "user".to_string(),
+                    content: user_text,
+                    timestamp,
+                });
+                messages.push(crate::models::ConversationMessage {
+                    role: "assistant".to_string(),
+                    content: reply_text,
+                    timestamp,
+                });
+            }
+            
+            // Get related CoreValues and Persons from Neo4j
+            let mut core_values = Vec::new();
+            let mut persons = Vec::new();
+            
+            let neo4j_query = neo4rs::query(
+                "MATCH (e:Episode {parent_id: $parent_id})
+                 OPTIONAL MATCH (e)-[:HOLDS]->(cv:CoreValue)
+                 OPTIONAL MATCH (p:Person)-[:RELATED_TO]->(e)
+                 RETURN collect(DISTINCT cv.name) as core_values,
+                        collect(DISTINCT p.name) as persons"
+            ).param("parent_id", parent_id.clone());
+            
+            if let Ok(mut result) = state.neo4j.execute(neo4j_query).await {
+                if let Ok(Some(row)) = result.next().await {
+                    core_values = row.get::<Vec<String>>("core_values")
+                        .unwrap_or_default()
+                        .into_iter()
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                    persons = row.get::<Vec<String>>("persons")
+                        .unwrap_or_default()
+                        .into_iter()
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                }
+            }
+            
+            Ok(Json(EpisodeDetail {
+                parent_id,
+                timestamp: first_timestamp,
+                core_values,
+                persons,
+                messages,
+            }))
+        }
+        Err(e) => {
+            tracing::error!("Failed to fetch episode detail: {}", e);
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }

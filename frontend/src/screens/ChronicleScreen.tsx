@@ -57,10 +57,9 @@ export default function ChronicleScreen() {
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp * 1000);
-    return date.toLocaleTimeString('ja-JP', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
   };
 
   const getEmotionIcon = (emotion?: string) => {
@@ -323,6 +322,8 @@ const styles = StyleSheet.create({
   episodeTime: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.textSecondary,
+    flexShrink: 0,
+    minWidth: 50,
   },
   userMessage: {
     marginBottom: theme.spacing.md,
