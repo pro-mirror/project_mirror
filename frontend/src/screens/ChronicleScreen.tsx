@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
     marginTop: 100,
   },
   emptyText: {
-    fontSize: theme.fontSize.lg,
+    fontSize: theme.fontSize.md,
     color: theme.colors.textSecondary,
     marginBottom: theme.spacing.sm,
   },

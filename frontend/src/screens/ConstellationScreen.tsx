@@ -30,7 +30,8 @@ export default function ConstellationScreen() {
     queryKey: ['core-value-graph'],
     queryFn: insightsApi.getCoreValueGraph,
     staleTime: 0, // Always consider data stale
-    refetchOnMount: true, // Refetch when component mounts
+    gcTime: 0, // Remove cache immediately
+    refetchOnMount: 'always', // Always refetch on mount
     refetchOnWindowFocus: true, // Refetch when window/tab gains focus
   });
 
@@ -45,6 +46,8 @@ export default function ConstellationScreen() {
     queryFn: () => episodesApi.getEpisodeByParentId(selectedEpisode!),
     enabled: !!selectedEpisode,
     retry: false, // Don't retry on 404
+    gcTime: 0, // Remove cache immediately
+    staleTime: 0, // Always fetch fresh data
   });
 
   const { data: coreValueData, isLoading: isLoadingCoreValue, error: coreValueError } = useQuery({
@@ -52,6 +55,8 @@ export default function ConstellationScreen() {
     queryFn: () => insightsApi.getCoreValueDetail(selectedCoreValue!),
     enabled: !!selectedCoreValue,
     retry: false,
+    gcTime: 0, // Remove cache immediately
+    staleTime: 0, // Always fetch fresh data
   });
 
   // Show modal with fade animation
@@ -91,7 +96,7 @@ export default function ConstellationScreen() {
   if (!data || data.nodes.length === 0) {
     return (
       <View style={styles.container}>
-        <Text style={styles.errorText}>データがありません</Text>
+        <Text style={[styles.errorText, { color: theme.colors.textSecondary, fontSize: theme.fontSize.md }]}>データがありません</Text>
         <Text style={styles.loadingText}>会話を重ねると、ここにグラフが表示されます</Text>
       </View>
     );

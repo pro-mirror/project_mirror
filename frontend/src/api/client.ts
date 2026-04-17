@@ -108,10 +108,6 @@ export const chatApi = {
 };
 
 export const insightsApi = {
-  getGraph: async (): Promise<GraphData> => {
-    const response = await api.get<GraphData>('/insights/graph');
-    return response.data;
-  },
   getCoreValueGraph: async (): Promise<GraphData> => {
     const response = await api.get<GraphData>('/insights/core-value-graph');
     return response.data;

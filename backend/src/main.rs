@@ -59,7 +59,6 @@ async fn main() -> Result<()> {
         .route("/health", get(api::health::health_check))
         .route("/api/v1/chat/message", post(api::chat::send_message))
         .route("/api/v1/chat/voice", post(api::chat::send_voice_message))
-        .route("/api/v1/insights/graph", get(api::insights::get_graph))
         .route("/api/v1/insights/core-value-graph", get(api::insights::get_core_value_graph))
         .route("/api/v1/insights/core-values/:name", get(api::insights::get_core_value_detail))
         .route("/api/v1/episodes", get(api::episodes::get_episodes))
