@@ -1,6 +1,6 @@
 use axum::{extract::State, http::StatusCode, Json};
 use serde::{Deserialize, Serialize};
-use tracing::info;
+use tracing::{info, error};
 
 use crate::api::AppState;
 use crate::models::EpisodeDetail;
@@ -20,6 +20,11 @@ pub async fn get_episodes(
 ) -> Result<Json<Vec<EpisodeResponse>>, StatusCode> {
     info!("Fetching all episodes from PostgreSQL");
     
+    // --- ロック取得とクライアント抽出 ---
+    let lock = state.inner.read().await;
+    let pg_pool = lock.pg_pool.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    // ----------------------------------
+
     // Get all sub-chunks from PostgreSQL
     match sqlx::query_as::<_, (String, String, String, i64)>(
         r#"
@@ -33,7 +38,7 @@ pub async fn get_episodes(
         LIMIT 100
         "#
     )
-    .fetch_all(&state.pg_pool)
+    .fetch_all(pg_pool) // &state.pg_pool から pg_pool へ変更
     .await
     {
         Ok(results) => {
@@ -53,7 +58,7 @@ pub async fn get_episodes(
             Ok(Json(episodes))
         }
         Err(e) => {
-            tracing::error!("Failed to fetch episodes: {}", e);
+            error!("Failed to fetch episodes: {}", e);
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
@@ -65,6 +70,10 @@ pub async fn get_episode_by_id(
 ) -> Result<Json<EpisodeResponse>, StatusCode> {
     info!("Fetching episode with id: {}", id);
     
+    // --- ロック取得 ---
+    let lock = state.inner.read().await;
+    let pg_pool = lock.pg_pool.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+
     match sqlx::query_as::<_, (String, String, String, i64)>(
         r#"
         SELECT 
@@ -77,7 +86,7 @@ pub async fn get_episode_by_id(
         "#
     )
     .bind(&id)
-    .fetch_optional(&state.pg_pool)
+    .fetch_optional(pg_pool)
     .await
     {
         Ok(Some((id, user_text, reply_text, timestamp))) => {
@@ -92,7 +101,7 @@ pub async fn get_episode_by_id(
         }
         Ok(None) => Err(StatusCode::NOT_FOUND),
         Err(e) => {
-            tracing::error!("Failed to fetch episode: {}", e);
+            error!("Failed to fetch episode: {}", e);
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
@@ -105,6 +114,11 @@ pub async fn get_episode_by_parent_id(
 ) -> Result<Json<EpisodeDetail>, StatusCode> {
     info!("Fetching episode detail for parent_id: {}", parent_id);
     
+    // --- ロック取得 ---
+    let lock = state.inner.read().await;
+    let pg_pool = lock.pg_pool.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let neo4j = lock.neo4j.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+
     // Parse parent_id as UUID
     let parent_uuid = match uuid::Uuid::parse_str(&parent_id) {
         Ok(uuid) => uuid,
@@ -124,7 +138,7 @@ pub async fn get_episode_by_parent_id(
         "#
     )
     .bind(parent_uuid)
-    .fetch_all(&state.pg_pool)
+    .fetch_all(pg_pool)
     .await
     {
         Ok(results) => {
@@ -135,7 +149,6 @@ pub async fn get_episode_by_parent_id(
             let mut messages = Vec::new();
             let first_timestamp = results.first().map(|r| r.2).unwrap_or(0);
             
-            // Convert to conversation messages
             for (user_text, reply_text, timestamp) in results {
                 messages.push(crate::models::ConversationMessage {
                     role: "user".to_string(),
@@ -149,7 +162,6 @@ pub async fn get_episode_by_parent_id(
                 });
             }
             
-            // Get related CoreValues and Persons from Neo4j
             let mut core_values = Vec::new();
             let mut persons = Vec::new();
             
@@ -161,18 +173,14 @@ pub async fn get_episode_by_parent_id(
                         collect(DISTINCT p.name) as persons"
             ).param("parent_id", parent_id.clone());
             
-            if let Ok(mut result) = state.neo4j.execute(neo4j_query).await {
+            if let Ok(mut result) = neo4j.execute(neo4j_query).await {
                 if let Ok(Some(row)) = result.next().await {
-                    core_values = row.get::<Vec<String>>("core_values")
-                        .unwrap_or_default()
-                        .into_iter()
-                        .filter(|s| !s.is_empty())
-                        .collect();
-                    persons = row.get::<Vec<String>>("persons")
-                        .unwrap_or_default()
-                        .into_iter()
-                        .filter(|s| !s.is_empty())
-                        .collect();
+                    // 型を明示的に指定して抽出
+                    let cvs: Vec<String> = row.get("core_values").unwrap_or_default();
+                    let ps: Vec<String> = row.get("persons").unwrap_or_default();
+
+                    core_values = cvs.into_iter().filter(|s| !s.is_empty()).collect();
+                    persons = ps.into_iter().filter(|s| !s.is_empty()).collect();
                 }
             }
             
@@ -185,7 +193,7 @@ pub async fn get_episode_by_parent_id(
             }))
         }
         Err(e) => {
-            tracing::error!("Failed to fetch episode detail: {}", e);
+            error!("Failed to fetch episode detail: {}", e);
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }

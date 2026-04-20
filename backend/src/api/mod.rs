@@ -1,37 +1,25 @@
-// pub mod chat;
-// pub mod health;
-// pub mod insights;
-// pub mod episodes;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+// 修正：QdrantClient ではなく Qdrant をインポート
+pub use qdrant_client::Qdrant; 
 
-// use neo4rs::Graph;
-// use qdrant_client::Qdrant;
-// use async_openai::Client;
-// use sqlx::PgPool;
+pub mod health;
+pub mod chat;
+pub mod insights;
+pub mod episodes;
 
-// #[derive(Clone)]
-// pub struct AppState {
-//     pub neo4j: Graph,
-//     pub qdrant: Qdrant,
-//     pub openai: Client<async_openai::config::OpenAIConfig>,
-//     pub pg_pool: PgPool,
-// }
-
-
-use std::sync::Arc;                                                              
-use tokio::sync::RwLock;                                                         
-                                                                                 
-pub mod health;                                                                  
-pub mod chat;                                                                    
-pub mod insights;                                                                
-pub mod episodes;                                                                
-                                                                                 
-#[derive(Clone, Default)]                                                        
-pub struct InitState {                                                           
-    pub neo4j: Option<neo4rs::Graph>,                                            
-    pub qdrant: Option<qdrant_client::client::QdrantClient>,                     
-    pub pg_pool: Option<sqlx::PgPool>,                                           
+#[derive(Clone, Default)]
+pub struct InitState {
+    pub neo4j: Option<neo4rs::Graph>,
+    // 修正：ジェネリクス不要の Qdrant 型にする
+    pub qdrant: Option<Qdrant>, 
+    pub pg_pool: Option<sqlx::PgPool>,
     pub openai: Option<async_openai::Client<async_openai::config::OpenAIConfig>>,
-    pub initialized: bool,                                                       
-}                                                                                
-                                                                                 
-pub type AppState = (Arc<RwLock<InitState>>, crate::config::Config);   
+    pub initialized: bool,
+}
+
+#[derive(Clone)]
+pub struct AppState {
+    pub inner: Arc<RwLock<InitState>>,
+    pub config: crate::config::Config,
+}
