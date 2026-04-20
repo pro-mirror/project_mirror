@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Project Mirror",
+    "name": "Mirror",
     "slug": "project-mirror",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -32,9 +32,12 @@
     },
     "extra": {
       "eas": {
-        "projectId": "YOUR_EAS_PROJECT_ID"
+        "projectId": "4c00b26e-3cb7-4d3f-9ffe-8590e04e5293"
       }
     },
-    "owner": "YOUR_EXPO_USERNAME"
+    "owner": "kibitaroukun",
+    "plugins": [
+      "expo-secure-store"
+    ]
   }
 }

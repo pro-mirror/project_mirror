@@ -17,7 +17,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://your-railway-app.railway.app/api/v1"
+        "EXPO_PUBLIC_API_BASE_URL": "https://projectmirror-production.up.railway.app/api/v1"
       }
     },
     "production": {
@@ -25,7 +25,7 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://your-railway-app.railway.app/api/v1"
+        "EXPO_PUBLIC_API_BASE_URL": "https://projectmirror-production.up.railway.app/api/v1"
       }
     }
   },
