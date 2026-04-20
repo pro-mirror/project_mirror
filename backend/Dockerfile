@@ -34,9 +34,5 @@ COPY --from=builder /app/target/release/project-mirror-backend /app/project-mirr
 # ポート公開
 EXPOSE 8080
 
-# ヘルスチェック
-# HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-#   CMD curl -f http://localhost:8080/health || exit 1
-
 # アプリケーション実行
 CMD ["/app/project-mirror-backend"]
