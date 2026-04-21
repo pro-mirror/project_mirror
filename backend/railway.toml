@@ -1,7 +1,6 @@
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
-rootDirectory = "backend"
 
 [deploy]
 startCommand = "/app/project-mirror-backend"
