@@ -30,6 +30,7 @@ RUN apt-get update && \
 
 # ビルドステージからバイナリをコピー
 COPY --from=builder /app/target/release/project-mirror-backend /app/project-mirror-backend
+RUN chmod +x /app/project-mirror-backend && ls -la /app/project-mirror-backend
 
 # ポート公開
 EXPOSE 8080
