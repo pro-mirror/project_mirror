@@ -1,0 +1,46 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "/app/project-mirror-backend"
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+sleepApplication = true
+region = "us-east4-eqdc4a"
+numReplicas = 1
+
+[[deploy.domains]]
+domain = "projectmirror-production.up.railway.app"
+
+[environments.production.deploy]
+region = "us-east4-eqdc4a"
+numReplicas = 1
+
+# ---------------------------------------------------------------------------
+# Environment variables
+#
+# Sensitive values (API keys, passwords, connection strings) are intentionally
+# left unset here so they are managed as Railway secret variables in the
+# dashboard and never committed to version control.
+#
+# Non-sensitive defaults that are safe to codify are set below.
+# ---------------------------------------------------------------------------
+
+[environments.production.variables]
+# Server
+HOST = "0.0.0.0"
+PORT = "8080"
+RUST_LOG = "info"
+
+# Neo4j — non-sensitive defaults; override secrets in the Railway dashboard
+NEO4J_USER = "neo4j"
+NEO4J_DATABASE = "neo4j"
+
+# The following variables must be set as Railway secret variables:
+#   OPENAI_API_KEY
+#   QDRANT_URL
+#   QDRANT_API_KEY
+#   NEO4J_URI
+#   NEO4J_PASSWORD
+#   DATABASE_PUBLIC_URL
