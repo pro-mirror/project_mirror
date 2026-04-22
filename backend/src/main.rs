@@ -26,16 +26,9 @@ async fn main() -> Result<()> {
     tracing::info!("Server will listen on port: {}", config.port);
 
     let init_state = Arc::new(RwLock::new(api::InitState::default()));
-    let init_state_clone = init_state.clone();
-    let config_clone = config.clone();
 
-    tokio::spawn(async move {
-        if let Err(e) = initialize_databases(&config_clone, &init_state_clone).await {
-            tracing::error!("Database initialization failed: {}", e);
-        }
-    });
+    initialize_databases(&config, &init_state).await?;
 
-    // 修正：AppState構造体として初期化
     let app_state = AppState {
         inner: init_state,
         config: config.clone(),
@@ -52,6 +45,7 @@ async fn main() -> Result<()> {
         .route("/api/v1/episodes/parent/:parent_id", get(api::episodes::get_episode_by_parent_id))
         .layer(CorsLayer::permissive())
         .with_state(app_state);
+
 
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
     tracing::info!("Attempting to bind to address: {}", addr);
