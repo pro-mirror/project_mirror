@@ -1,0 +1,61 @@
+name: Monthly Data Cleanup
+
+on:
+  schedule:
+    # 毎月1日の午前3時（UTC）に実行 = 日本時間12時
+    - cron: '0 3 1 * *'
+  
+  # 手動実行を許可
+  workflow_dispatch:
+    inputs:
+      user_id:
+        description: 'User ID to cleanup'
+        required: false
+        default: 'default_user'
+      days_threshold:
+        description: 'Days threshold'
+        required: false
+        default: '180'
+      min_deletion_score:
+        description: 'Minimum deletion score'
+        required: false
+        default: '30.0'
+      limit:
+        description: 'Maximum episodes to delete'
+        required: false
+        default: '150'
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Run cleanup script
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          USER_ID: ${{ inputs.user_id || secrets.CLEANUP_USER_ID || 'default_user' }}
+          DAYS_THRESHOLD: ${{ inputs.days_threshold || '270' }}
+          MIN_DELETION_SCORE: ${{ inputs.min_deletion_score || '40.0' }}
+          LIMIT: ${{ inputs.limit || '100' }}
+        run: |
+          chmod +x scripts/cleanup.sh
+          ./scripts/cleanup.sh
+      
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Monthly cleanup failed. Please check the logs."
+          # ここにSlackやDiscordへの通知を追加可能
+
+      - name: Create summary
+        if: success()
+        run: |
+          echo "### ✅ Monthly Cleanup Completed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Date**: $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "- **User ID**: $USER_ID" >> $GITHUB_STEP_SUMMARY
+          echo "- **Days Threshold**: $DAYS_THRESHOLD" >> $GITHUB_STEP_SUMMARY
+          echo "- **Min Deletion Score**: $MIN_DELETION_SCORE" >> $GITHUB_STEP_SUMMARY
