@@ -72,7 +72,7 @@ pub async fn delete_vectors_by_parent_ids(
     client: &Qdrant,
     parent_ids: &[uuid::Uuid],
 ) -> Result<usize> {
-    use qdrant_client::qdrant::{Condition, Filter, PointsSelector, DeletePointsBuilder};
+    use qdrant_client::qdrant::{Condition, Filter, FilterSelector, PointsSelector, DeletePointsBuilder};
     
     if parent_ids.is_empty() {
         return Ok(0);
@@ -91,7 +91,7 @@ pub async fn delete_vectors_by_parent_ids(
     let delete_result = client
         .delete_points(
             DeletePointsBuilder::new(COLLECTION_NAME)
-                .points(PointsSelector::Filter(filter))
+                .points(PointsSelector::FilterSelector(FilterSelector { filter: Some(filter) }))
         )
         .await?;
 
