@@ -215,10 +215,10 @@ pub async fn delete_episodes_by_parent_ids(
     }
 
     // Delete parent_episodes (sub_chunks will be cascade deleted)
-    let deleted = sqlx::query!(
-        "DELETE FROM parent_episodes WHERE id = ANY($1)",
-        parent_ids
+    let deleted = sqlx::query(
+        "DELETE FROM parent_episodes WHERE id = ANY($1)"
     )
+    .bind(parent_ids)
     .execute(pool)
     .await?
     .rows_affected();

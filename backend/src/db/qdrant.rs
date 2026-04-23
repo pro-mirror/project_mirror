@@ -91,7 +91,7 @@ pub async fn delete_vectors_by_parent_ids(
     let delete_result = client
         .delete_points(
             DeletePointsBuilder::new(COLLECTION_NAME)
-                .points(PointsSelector::FilterSelector(filter.into()))
+                .points(PointsSelector::Filter(filter))
         )
         .await?;
 
