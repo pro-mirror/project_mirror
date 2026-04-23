@@ -27,7 +27,19 @@ async fn main() -> Result<()> {
 
     let init_state = Arc::new(RwLock::new(api::InitState::default()));
 
-    initialize_databases(&config, &init_state).await?;
+    // Spawn database initialization as a background task so the HTTP server
+    // can bind and pass health checks immediately without waiting for DB setup.
+    {
+        let config_bg = config.clone();
+        let init_state_bg = Arc::clone(&init_state);
+        tokio::spawn(async move {
+            tracing::info!("Background DB initialization started");
+            match initialize_databases(&config_bg, &init_state_bg).await {
+                Ok(()) => tracing::info!("Background DB initialization completed successfully"),
+                Err(e) => tracing::error!("Background DB initialization failed: {:#}", e),
+            }
+        });
+    }
 
     let app_state = AppState {
         inner: init_state,
@@ -46,7 +58,6 @@ async fn main() -> Result<()> {
         .route("/api/v1/maintenance/cleanup", post(api::maintenance::cleanup_old_data))
         .layer(CorsLayer::permissive())
         .with_state(app_state);
-
 
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
     tracing::info!("Attempting to bind to address: {}", addr);
