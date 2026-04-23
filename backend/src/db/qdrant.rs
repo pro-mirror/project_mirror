@@ -65,3 +65,38 @@ pub async fn recreate_collection(client: &Qdrant) -> Result<()> {
     
     Ok(())
 }
+
+/// Delete vectors by parent_ids (for cleanup)
+/// Returns the number of points deleted (approximate)
+pub async fn delete_vectors_by_parent_ids(
+    client: &Qdrant,
+    parent_ids: &[uuid::Uuid],
+) -> Result<usize> {
+    use qdrant_client::qdrant::{Condition, Filter, PointsSelector, DeletePointsBuilder};
+    
+    if parent_ids.is_empty() {
+        return Ok(0);
+    }
+
+    let parent_id_strs: Vec<String> = parent_ids.iter()
+        .map(|id| id.to_string())
+        .collect();
+
+    // Create filter for parent_ids
+    let filter = Filter::must([
+        Condition::matches("parent_id", parent_id_strs)
+    ]);
+
+    // Delete points matching the filter
+    let delete_result = client
+        .delete_points(
+            DeletePointsBuilder::new(COLLECTION_NAME)
+                .points(PointsSelector::FilterSelector(filter.into()))
+        )
+        .await?;
+
+    let deleted_count = parent_ids.len();
+    tracing::info!("Deleted ~{} vectors from Qdrant (parent_ids: {})", deleted_count, parent_ids.len());
+    
+    Ok(deleted_count)
+}

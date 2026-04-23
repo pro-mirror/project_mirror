@@ -194,3 +194,122 @@ pub async fn fetch_related_parent_ids(
     
     Ok(parent_ids)
 }
+
+/// Delete old episodes and cascade to related data
+/// Returns list of parent_ids that were deleted
+pub async fn cleanup_old_episodes(
+    graph: &Graph,
+    user_id: &str,
+    days_threshold: i64,
+    min_deletion_score: f64,
+    limit: i64,
+) -> Result<Vec<Uuid>> {
+    // Step 1: Find episodes to delete based on deletion score
+    let find_query = query(
+        "MATCH (u:User {id: $user_id})-[:HAS]->(e:Episode)
+         OPTIONAL MATCH (e)-[h:HOLDS]->(cv:CoreValue)
+         OPTIONAL MATCH (p:Person)-[r:RELATED_TO]->(e)
+         WITH e,
+              COALESCE(cv.last_mentioned, e.created_at) as last_value_mention,
+              COALESCE(r.last_mentioned_at, e.created_at) as last_person_mention,
+              COALESCE(SUM(h.weight), 0) as episode_total_weight,
+              COALESCE(SUM(r.mention_count), 0) as person_mentions
+         WITH e,
+              duration.between(
+                  COALESCE(
+                      CASE WHEN last_value_mention > last_person_mention 
+                           THEN last_value_mention 
+                           ELSE last_person_mention END,
+                      e.created_at
+                  ),
+                  datetime({timezone: 'Asia/Tokyo'})
+              ).days as days_since_activity,
+              episode_total_weight,
+              person_mentions
+         WITH e,
+              days_since_activity,
+              (days_since_activity / (episode_total_weight + person_mentions + 1.0)) as deletion_score
+         WHERE days_since_activity > $days_threshold
+           AND deletion_score > $min_deletion_score
+         RETURN e.parent_id as parent_id, deletion_score
+         ORDER BY deletion_score DESC
+         LIMIT $limit"
+    )
+    .param("user_id", user_id)
+    .param("days_threshold", days_threshold)
+    .param("min_deletion_score", min_deletion_score)
+    .param("limit", limit);
+    
+    let mut result = graph.execute(find_query).await?;
+    let mut parent_ids = Vec::new();
+    
+    while let Some(row) = result.next().await? {
+        if let Ok(parent_id_str) = row.get::<String>("parent_id") {
+            if let Ok(parent_id) = Uuid::parse_str(&parent_id_str) {
+                parent_ids.push(parent_id);
+            }
+        }
+    }
+    
+    // Step 2: Delete episodes and their relationships
+    if !parent_ids.is_empty() {
+        let parent_id_strs: Vec<String> = parent_ids.iter()
+            .map(|id| id.to_string())
+            .collect();
+        
+        let delete_query = query(
+            "MATCH (e:Episode)
+             WHERE e.parent_id IN $parent_ids
+             DETACH DELETE e"
+        )
+        .param("parent_ids", parent_id_strs);
+        
+        graph.run(delete_query).await?;
+        
+        tracing::info!("Deleted {} episodes from Neo4j", parent_ids.len());
+        
+        // Step 3: Clean up orphaned nodes
+        cleanup_orphaned_nodes(graph).await?;
+    }
+    
+    Ok(parent_ids)
+}
+
+/// Clean up orphaned CoreValue and Person nodes
+async fn cleanup_orphaned_nodes(graph: &Graph) -> Result<()> {
+    // Delete orphaned CoreValues with low total_weight
+    let cv_query = query(
+        "MATCH (cv:CoreValue)
+         WHERE NOT EXISTS { MATCH (cv)<-[:HOLDS]-(:Episode) }
+           AND cv.total_weight < 1.0
+         DELETE cv
+         RETURN count(*) as deleted"
+    );
+    
+    let mut cv_result = graph.execute(cv_query).await?;
+    if let Some(row) = cv_result.next().await? {
+        let deleted: i64 = row.get("deleted").unwrap_or(0);
+        if deleted > 0 {
+            tracing::info!("Deleted {} orphaned CoreValues", deleted);
+        }
+    }
+    
+    // Delete orphaned Persons with no recent activity
+    let person_query = query(
+        "MATCH (p:Person)
+         WHERE NOT EXISTS { MATCH (p)-[:RELATED_TO]->(:Episode) }
+           AND duration.between(p.last_mentioned, datetime()).days > 365
+         DELETE p
+         RETURN count(*) as deleted"
+    );
+    
+    let mut person_result = graph.execute(person_query).await?;
+    if let Some(row) = person_result.next().await? {
+        let deleted: i64 = row.get("deleted").unwrap_or(0);
+        if deleted > 0 {
+            tracing::info!("Deleted {} orphaned Persons", deleted);
+        }
+    }
+    
+    Ok(())
+}

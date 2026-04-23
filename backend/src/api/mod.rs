@@ -7,6 +7,7 @@ pub mod health;
 pub mod chat;
 pub mod insights;
 pub mod episodes;
+pub mod maintenance;
 
 #[derive(Clone, Default)]
 pub struct InitState {

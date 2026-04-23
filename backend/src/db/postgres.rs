@@ -204,3 +204,26 @@ pub struct SessionContent {
     pub content: String,
 }
 
+/// Delete episodes by parent_ids (for cleanup)
+/// Returns the number of parent_episodes deleted
+pub async fn delete_episodes_by_parent_ids(
+    pool: &PgPool,
+    parent_ids: &[Uuid],
+) -> Result<u64> {
+    if parent_ids.is_empty() {
+        return Ok(0);
+    }
+
+    // Delete parent_episodes (sub_chunks will be cascade deleted)
+    let deleted = sqlx::query!(
+        "DELETE FROM parent_episodes WHERE id = ANY($1)",
+        parent_ids
+    )
+    .execute(pool)
+    .await?
+    .rows_affected();
+    
+    tracing::info!("Deleted {} parent_episodes from PostgreSQL", deleted);
+    Ok(deleted)
+}
+

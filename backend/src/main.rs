@@ -43,6 +43,7 @@ async fn main() -> Result<()> {
         .route("/api/v1/episodes", get(api::episodes::get_episodes))
         .route("/api/v1/episodes/:id", get(api::episodes::get_episode_by_id))
         .route("/api/v1/episodes/parent/:parent_id", get(api::episodes::get_episode_by_parent_id))
+        .route("/api/v1/maintenance/cleanup", post(api::maintenance::cleanup_old_data))
         .layer(CorsLayer::permissive())
         .with_state(app_state);
 
