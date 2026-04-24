@@ -1,12 +1,49 @@
-use anyhow::Result;
+use anyhow::{Result, Context};
 use sqlx::PgPool;
 use uuid::Uuid;
+use std::time::Duration;
 
-/// Create PostgreSQL connection pool
+const MAX_RETRIES: u32 = 10;
+const INITIAL_RETRY_DELAY_MS: u64 = 500;
+
+/// Create PostgreSQL connection pool with retry logic
 pub async fn create_pool(database_public_url: &str) -> Result<PgPool> {
-    let pool = PgPool::connect(database_public_url).await?;
-    tracing::info!("Connected to PostgreSQL");
-    Ok(pool)
+    let mut retry_count = 0;
+    let mut delay = Duration::from_millis(INITIAL_RETRY_DELAY_MS);
+    
+    loop {
+        tracing::info!("Attempting to connect to PostgreSQL (attempt {}/{})", 
+            retry_count + 1, MAX_RETRIES);
+        
+        // Configure connection pool with timeouts (recreate each attempt)
+        let pool_options = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(5)
+            .acquire_timeout(Duration::from_secs(10))
+            .idle_timeout(Duration::from_secs(600));
+        
+        match pool_options.connect(database_public_url).await {
+            Ok(pool) => {
+                tracing::info!("✓ Successfully connected to PostgreSQL");
+                return Ok(pool);
+            }
+            Err(e) if retry_count < MAX_RETRIES => {
+                retry_count += 1;
+                tracing::warn!(
+                    "Failed to connect to PostgreSQL (attempt {}/{}): {}. Retrying in {:?}...", 
+                    retry_count, MAX_RETRIES, e, delay
+                );
+                tokio::time::sleep(delay).await;
+                // Exponential backoff with max 8 seconds
+                delay = std::cmp::min(delay * 2, Duration::from_secs(8));
+            }
+            Err(e) => {
+                return Err(e).context(format!(
+                    "Failed to connect to PostgreSQL after {} attempts. Check: 1) Database URL is correct, 2) Credentials are valid, 3) Network connectivity, 4) PostgreSQL service is running", 
+                    MAX_RETRIES
+                ));
+            }
+        }
+    }
 }
 
 /// Initialize database schema (create tables if not exist)

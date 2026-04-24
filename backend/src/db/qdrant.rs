@@ -1,19 +1,48 @@
-use anyhow::Result;
+use anyhow::{Result, Context};
 use qdrant_client::Qdrant;
 use qdrant_client::qdrant::Distance;
 use crate::config::Config;
+use std::time::Duration;
 
 const COLLECTION_NAME: &str = "mirror_episodes";
 const VECTOR_SIZE: u64 = 1536; // OpenAI text-embedding-3-small
+const MAX_RETRIES: u32 = 10;
+const INITIAL_RETRY_DELAY_MS: u64 = 500;
 
 pub async fn create_client(config: &Config) -> Result<Qdrant> {
-    let client = Qdrant::from_url(&config.qdrant_url)
-        .api_key(config.qdrant_api_key.clone())
-        .build()?;
+    let mut retry_count = 0;
+    let mut delay = Duration::from_millis(INITIAL_RETRY_DELAY_MS);
     
-    tracing::info!("Connected to Qdrant at {}", config.qdrant_url);
-    
-    Ok(client)
+    loop {
+        tracing::info!("Attempting to connect to Qdrant at {} (attempt {}/{})", 
+            config.qdrant_url, retry_count + 1, MAX_RETRIES);
+        
+        match Qdrant::from_url(&config.qdrant_url)
+            .api_key(config.qdrant_api_key.clone())
+            .build() 
+        {
+            Ok(client) => {
+                tracing::info!("✓ Successfully connected to Qdrant at {}", config.qdrant_url);
+                return Ok(client);
+            }
+            Err(e) if retry_count < MAX_RETRIES => {
+                retry_count += 1;
+                tracing::warn!(
+                    "Failed to connect to Qdrant (attempt {}/{}): {}. Retrying in {:?}...", 
+                    retry_count, MAX_RETRIES, e, delay
+                );
+                tokio::time::sleep(delay).await;
+                // Exponential backoff with max 8 seconds
+                delay = std::cmp::min(delay * 2, Duration::from_secs(8));
+            }
+            Err(e) => {
+                return Err(e).context(format!(
+                    "Failed to connect to Qdrant after {} attempts. Check: 1) Qdrant URL is correct, 2) API key is valid, 3) Network connectivity, 4) Qdrant service is running", 
+                    MAX_RETRIES
+                ));
+            }
+        }
+    }
 }
 
 /// Initialize the Qdrant collection if it doesn't exist
@@ -72,7 +101,7 @@ pub async fn delete_vectors_by_parent_ids(
     client: &Qdrant,
     parent_ids: &[uuid::Uuid],
 ) -> Result<usize> {
-    use qdrant_client::qdrant::{Condition, Filter, FilterSelector, PointsSelector, DeletePointsBuilder};
+    use qdrant_client::qdrant::{Condition, Filter, DeletePoints, PointsSelector, points_selector};
     
     if parent_ids.is_empty() {
         return Ok(0);
@@ -87,13 +116,20 @@ pub async fn delete_vectors_by_parent_ids(
         Condition::matches("parent_id", parent_id_strs)
     ]);
 
-    // Delete points matching the filter
-    let delete_result = client
-        .delete_points(
-            DeletePointsBuilder::new(COLLECTION_NAME)
-                .points(PointsSelector::FilterSelector(FilterSelector { filter: Some(filter) }))
-        )
-        .await?;
+    // Delete points matching the filter using low-level API
+    let delete_request = DeletePoints {
+        collection_name: COLLECTION_NAME.to_string(),
+        wait: Some(true),
+        points: Some(PointsSelector {
+            points_selector_one_of: Some(
+                points_selector::PointsSelectorOneOf::Filter(filter)
+            )
+        }),
+        ordering: None,
+        shard_key_selector: None, timeout: None,
+    };
+    
+    client.delete_points(delete_request).await?;
 
     let deleted_count = parent_ids.len();
     tracing::info!("Deleted ~{} vectors from Qdrant (parent_ids: {})", deleted_count, parent_ids.len());

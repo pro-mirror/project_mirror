@@ -70,43 +70,86 @@ async fn main() -> Result<()> {
 }
 
 async fn initialize_databases(config: &Config, init_state: &Arc<RwLock<api::InitState>>) -> Result<()> {
-    tracing::info!("Starting database initialization...");
+    tracing::info!("=== Starting database initialization ===");
     
-    tracing::info!("Connecting to Neo4j...");
-    let neo4j_client = db::neo4j::create_client(config).await?;
-    tracing::info!("Neo4j client created successfully");
+    tracing::info!("[1/4] Connecting to Neo4j...");
+    let neo4j_client = match db::neo4j::create_client(config).await {
+        Ok(client) => {
+            tracing::info!("[1/4] ✓ Neo4j connection established");
+            client
+        }
+        Err(e) => {
+            tracing::error!("[1/4] ✗ Neo4j connection failed: {:#}", e);
+            return Err(e);
+        }
+    };
     
-    tracing::info!("Connecting to Qdrant...");
-    let qdrant_client = db::qdrant::create_client(config).await?;
-    tracing::info!("Qdrant client created successfully");
+    tracing::info!("[2/4] Connecting to Qdrant...");
+    let qdrant_client = match db::qdrant::create_client(config).await {
+        Ok(client) => {
+            tracing::info!("[2/4] ✓ Qdrant connection established");
+            client
+        }
+        Err(e) => {
+            tracing::error!("[2/4] ✗ Qdrant connection failed: {:#}", e);
+            return Err(e);
+        }
+    };
     
-    tracing::info!("Connecting to PostgreSQL...");
-    let pg_pool = db::postgres::create_pool(&config.database_public_url).await?;
-    tracing::info!("PostgreSQL pool created successfully");
+    tracing::info!("[3/4] Connecting to PostgreSQL...");
+    let pg_pool = match db::postgres::create_pool(&config.database_public_url).await {
+        Ok(pool) => {
+            tracing::info!("[3/4] ✓ PostgreSQL connection established");
+            pool
+        }
+        Err(e) => {
+            tracing::error!("[3/4] ✗ PostgreSQL connection failed: {:#}", e);
+            return Err(e);
+        }
+    };
     
-    tracing::info!("Creating OpenAI client...");
-    let openai_client = llm::openai::create_client(config)?;
-    tracing::info!("OpenAI client created successfully");
+    tracing::info!("[4/4] Creating OpenAI client...");
+    let openai_client = match llm::openai::create_client(config) {
+        Ok(client) => {
+            tracing::info!("[4/4] ✓ OpenAI client created");
+            client
+        }
+        Err(e) => {
+            tracing::error!("[4/4] ✗ OpenAI client creation failed: {:#}", e);
+            return Err(e);
+        }
+    };
 
+    tracing::info!("=== Initializing database schemas ===");
+    
     tracing::info!("Initializing Neo4j schema...");
-    db::neo4j::initialize_schema(&neo4j_client).await?;
-    tracing::info!("Neo4j schema initialized");
+    if let Err(e) = db::neo4j::initialize_schema(&neo4j_client).await {
+        tracing::error!("Neo4j schema initialization failed: {:#}", e);
+        return Err(e);
+    }
+    tracing::info!("✓ Neo4j schema initialized");
     
     tracing::info!("Initializing Qdrant collection...");
-    db::qdrant::initialize_collection(&qdrant_client).await?;
-    tracing::info!("Qdrant collection initialized");
+    if let Err(e) = db::qdrant::initialize_collection(&qdrant_client).await {
+        tracing::error!("Qdrant collection initialization failed: {:#}", e);
+        return Err(e);
+    }
+    tracing::info!("✓ Qdrant collection initialized");
     
     tracing::info!("Initializing PostgreSQL schema...");
-    db::postgres::initialize_schema(&pg_pool).await?;
-    tracing::info!("PostgreSQL schema initialized");
+    if let Err(e) = db::postgres::initialize_schema(&pg_pool).await {
+        tracing::error!("PostgreSQL schema initialization failed: {:#}", e);
+        return Err(e);
+    }
+    tracing::info!("✓ PostgreSQL schema initialized");
 
     let mut state = init_state.write().await;
     state.neo4j = Some(neo4j_client);
-    state.qdrant = Some(qdrant_client); // Qdrant型で一致
+    state.qdrant = Some(qdrant_client);
     state.pg_pool = Some(pg_pool);
     state.openai = Some(openai_client);
     state.initialized = true;
     
-    tracing::info!("All databases initialized successfully");
+    tracing::info!("=== ✓ All databases initialized successfully ===");
     Ok(())
 }

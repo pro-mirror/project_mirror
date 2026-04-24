@@ -1,10 +1,48 @@
-use anyhow::Result;
+use anyhow::{Result, Context};
 use neo4rs::{Graph, ConfigBuilder, query};
 use crate::config::Config;
 use crate::models::CoreValueExtraction;
 use uuid::Uuid;
+use std::time::Duration;
+
+const MAX_RETRIES: u32 = 10;
+const INITIAL_RETRY_DELAY_MS: u64 = 500;
 
 pub async fn create_client(config: &Config) -> Result<Graph> {
+    let mut retry_count = 0;
+    let mut delay = Duration::from_millis(INITIAL_RETRY_DELAY_MS);
+    
+    loop {
+        tracing::info!("Attempting to connect to Neo4j at {} (attempt {}/{})", 
+            config.neo4j_uri, retry_count + 1, MAX_RETRIES);
+        
+        match try_connect(config).await {
+            Ok(graph) => {
+                tracing::info!("✓ Successfully connected to Neo4j at {} (database: {})", 
+                    config.neo4j_uri, config.neo4j_database);
+                return Ok(graph);
+            }
+            Err(e) if retry_count < MAX_RETRIES => {
+                retry_count += 1;
+                tracing::warn!(
+                    "Failed to connect to Neo4j (attempt {}/{}): {}. Retrying in {:?}...", 
+                    retry_count, MAX_RETRIES, e, delay
+                );
+                tokio::time::sleep(delay).await;
+                // Exponential backoff with max 8 seconds
+                delay = std::cmp::min(delay * 2, Duration::from_secs(8));
+            }
+            Err(e) => {
+                return Err(e).context(format!(
+                    "Failed to connect to Neo4j after {} attempts. Check: 1) Neo4j URI is correct, 2) Credentials are valid, 3) Network connectivity, 4) Neo4j service is running", 
+                    MAX_RETRIES
+                ));
+            }
+        }
+    }
+}
+
+async fn try_connect(config: &Config) -> Result<Graph> {
     let neo4j_config = ConfigBuilder::default()
         .uri(&config.neo4j_uri)
         .user(&config.neo4j_user)
@@ -13,9 +51,6 @@ pub async fn create_client(config: &Config) -> Result<Graph> {
         .build()?;
     
     let graph = Graph::connect(neo4j_config).await?;
-    
-    tracing::info!("Connected to Neo4j at {} (database: {})", config.neo4j_uri, config.neo4j_database);
-    
     Ok(graph)
 }
 
