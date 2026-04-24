@@ -183,14 +183,26 @@ async fn generate_mirror_response(
     let request = CreateChatCompletionRequestArgs::default()
         .model("gpt-4o-mini")
         .messages(messages)
+        .max_tokens(1000u16) // Explicitly set max tokens to prevent truncation
         .build()?;
     
     let response = openai.chat().create(request).await?;
     
-    let reply = response
+    let choice = response
         .choices
         .first()
-        .and_then(|choice| choice.message.content.clone())
+        .ok_or_else(|| anyhow::anyhow!("No response from OpenAI"))?;
+    
+    // Check if response was truncated
+    if let Some(finish_reason) = &choice.finish_reason {
+        tracing::debug!("OpenAI finish_reason: {:?}", finish_reason);
+        let reason_str = format!("{:?}", finish_reason).to_lowercase();
+        if reason_str.contains("length") {
+            tracing::warn!("OpenAI response was truncated due to max_tokens limit");
+        }
+    }
+    
+    let reply = choice.message.content.clone()
         .unwrap_or_else(|| "応答を生成できませんでした。".to_string());
     
     Ok(reply)

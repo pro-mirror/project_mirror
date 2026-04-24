@@ -74,15 +74,27 @@ pub async fn extract_memory(
         .model("gpt-4o-mini")
         .messages(messages)
         .temperature(0.3)
+        .max_tokens(500u16)
         .build()?;
 
     let response = client.chat().create(request).await?;
     
-    let content = response
+    let choice = response
         .choices
         .first()
-        .and_then(|choice| choice.message.content.clone())
         .ok_or_else(|| anyhow::anyhow!("No response from LLM"))?;
+    
+    // Check if response was truncated
+    if let Some(finish_reason) = &choice.finish_reason {
+        tracing::debug!("Memory extraction finish_reason: {:?}", finish_reason);
+        let reason_str = format!("{:?}", finish_reason).to_lowercase();
+        if reason_str.contains("length") {
+            tracing::warn!("Memory extraction response was truncated due to max_tokens limit");
+        }
+    }
+    
+    let content = choice.message.content.clone()
+        .ok_or_else(|| anyhow::anyhow!("No content in response"))?;
 
     // Strip markdown code blocks if present
     let json_content = strip_markdown_code_block(&content);
@@ -155,15 +167,27 @@ pub async fn extract_core_values(
         .model("gpt-4o-mini")
         .messages(messages)
         .temperature(0.3)
+        .max_tokens(800u16)
         .build()?;
 
     let response = client.chat().create(request).await?;
     
-    let content = response
+    let choice = response
         .choices
         .first()
-        .and_then(|choice| choice.message.content.clone())
         .ok_or_else(|| anyhow::anyhow!("No response from LLM"))?;
+    
+    // Check if response was truncated
+    if let Some(finish_reason) = &choice.finish_reason {
+        tracing::debug!("Core value extraction finish_reason: {:?}", finish_reason);
+        let reason_str = format!("{:?}", finish_reason).to_lowercase();
+        if reason_str.contains("length") {
+            tracing::warn!("Core value extraction response was truncated due to max_tokens limit");
+        }
+    }
+    
+    let content = choice.message.content.clone()
+        .ok_or_else(|| anyhow::anyhow!("No content in response"))?;
 
     // Strip markdown code blocks if present
     let json_content = strip_markdown_code_block(&content);
