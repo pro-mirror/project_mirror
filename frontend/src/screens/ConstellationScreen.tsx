@@ -252,17 +252,6 @@ export default function ConstellationScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Explanation */}
-      {/* <View style={styles.explanationBox}> */}
-        {/* <Text style={styles.explanationTitle}>あなたの記憶のつながり</Text> */}
-       {/* <Text style={styles.explanationText}>
-          大切にしている価値観とそれに関連するエピソードを可視化しています。
-        </Text> */}
-        {/* <Text style={styles.loadingText}>
-          価値観:{coreValues.length}件 / エピソード:{episodes.length}件
-        </Text>  */}
-      {/* </View> */}
-
       {/* Legend */}
       <View style={styles.legendContainer}>
         <View style={styles.legendItem}>

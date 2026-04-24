@@ -312,11 +312,10 @@ pub async fn cleanup_old_episodes(
 
 /// Clean up orphaned CoreValue and Person nodes
 async fn cleanup_orphaned_nodes(graph: &Graph) -> Result<()> {
-    // Delete orphaned CoreValues with low total_weight
+    // Delete all orphaned CoreValues (not connected to any Episode)
     let cv_query = query(
         "MATCH (cv:CoreValue)
          WHERE NOT EXISTS { MATCH (cv)<-[:HOLDS]-(:Episode) }
-           AND cv.total_weight < 1.0
          DELETE cv
          RETURN count(*) as deleted"
     );
@@ -329,11 +328,10 @@ async fn cleanup_orphaned_nodes(graph: &Graph) -> Result<()> {
         }
     }
     
-    // Delete orphaned Persons with no recent activity
+    // Delete all orphaned Persons (not connected to any Episode)
     let person_query = query(
         "MATCH (p:Person)
          WHERE NOT EXISTS { MATCH (p)-[:RELATED_TO]->(:Episode) }
-           AND duration.between(p.last_mentioned, datetime()).days > 365
          DELETE p
          RETURN count(*) as deleted"
     );

@@ -58,7 +58,7 @@ export default function App() {
             <Tab.Screen 
               name="Chronicle" 
               component={ChronicleScreen}
-              options={{ title: 'ログ' }}
+              options={{ title: '記憶' }}
             />
             <Tab.Screen 
               name="Constellation" 

@@ -68,6 +68,7 @@ pub async fn cleanup_old_data(
     })?;
 
     if parent_ids.is_empty() {
+        tracing::info!("No episodes found for deletion (user_id: {})", req.user_id);
         return Ok(Json(CleanupResponse {
             success: true,
             deleted_count: 0,
@@ -75,21 +76,27 @@ pub async fn cleanup_old_data(
         }));
     }
 
+    tracing::info!("Found {} episodes to delete: {:?}", parent_ids.len(), parent_ids);
+
     // Step 2: Delete from Qdrant
+    tracing::info!("Deleting {} vectors from Qdrant...", parent_ids.len());
     crate::db::qdrant::delete_vectors_by_parent_ids(qdrant, &parent_ids)
         .await
         .map_err(|e| {
             tracing::error!("Qdrant cleanup failed: {}", e);
             (StatusCode::INTERNAL_SERVER_ERROR, format!("Qdrant cleanup failed: {}", e))
         })?;
+    tracing::info!("✓ Qdrant deletion completed");
 
     // Step 3: Delete from PostgreSQL
+    tracing::info!("Deleting {} episodes from PostgreSQL...", parent_ids.len());
     crate::db::postgres::delete_episodes_by_parent_ids(pg_pool, &parent_ids)
         .await
         .map_err(|e| {
             tracing::error!("PostgreSQL cleanup failed: {}", e);
             (StatusCode::INTERNAL_SERVER_ERROR, format!("PostgreSQL cleanup failed: {}", e))
         })?;
+    tracing::info!("✓ PostgreSQL deletion completed");
 
     Ok(Json(CleanupResponse {
         success: true,
@@ -97,3 +104,5 @@ pub async fn cleanup_old_data(
         message: format!("Successfully deleted {} episodes", parent_ids.len()),
     }))
 }
+
+

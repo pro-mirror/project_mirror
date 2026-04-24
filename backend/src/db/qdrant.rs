@@ -47,6 +47,8 @@ pub async fn create_client(config: &Config) -> Result<Qdrant> {
 
 /// Initialize the Qdrant collection if it doesn't exist
 pub async fn initialize_collection(client: &Qdrant) -> Result<()> {
+    use qdrant_client::qdrant::{FieldType, CreateFieldIndexCollectionBuilder};
+    
     // Check if collection exists
     let collections = client.list_collections().await?;
     let exists = collections.collections.iter()
@@ -61,8 +63,32 @@ pub async fn initialize_collection(client: &Qdrant) -> Result<()> {
         ).await?;
         
         tracing::info!("Created Qdrant collection: {}", COLLECTION_NAME);
+        
+        // Create payload index for parent_id field (required for filtering)
+        let index_request = CreateFieldIndexCollectionBuilder::new(
+            COLLECTION_NAME,
+            "parent_id",
+            FieldType::Keyword,
+        );
+        
+        client.create_field_index(index_request).await?;
+        
+        tracing::info!("Created payload index for parent_id field");
     } else {
         tracing::info!("Qdrant collection already exists: {}", COLLECTION_NAME);
+        
+        // Ensure index exists even if collection was created before
+        // This is idempotent - won't fail if index already exists
+        let index_request = CreateFieldIndexCollectionBuilder::new(
+            COLLECTION_NAME,
+            "parent_id",
+            FieldType::Keyword,
+        );
+        
+        match client.create_field_index(index_request).await {
+            Ok(_) => tracing::info!("Ensured payload index exists for parent_id field"),
+            Err(e) => tracing::warn!("Index creation skipped (may already exist): {}", e),
+        }
     }
     
     Ok(())
@@ -72,6 +98,8 @@ pub async fn initialize_collection(client: &Qdrant) -> Result<()> {
 /// Development utility: not used in production
 #[allow(dead_code)]
 pub async fn recreate_collection(client: &Qdrant) -> Result<()> {
+    use qdrant_client::qdrant::{FieldType, CreateFieldIndexCollectionBuilder};
+    
     // Delete if exists
     let collections = client.list_collections().await?;
     let exists = collections.collections.iter()
@@ -91,6 +119,17 @@ pub async fn recreate_collection(client: &Qdrant) -> Result<()> {
     ).await?;
     
     tracing::info!("Recreated Qdrant collection: {}", COLLECTION_NAME);
+    
+    // Create payload index for parent_id field
+    let index_request = CreateFieldIndexCollectionBuilder::new(
+        COLLECTION_NAME,
+        "parent_id",
+        FieldType::Keyword,
+    );
+    
+    client.create_field_index(index_request).await?;
+    
+    tracing::info!("Created payload index for parent_id field");
     
     Ok(())
 }

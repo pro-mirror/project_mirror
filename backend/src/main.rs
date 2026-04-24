@@ -17,68 +17,42 @@ use crate::api::AppState;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Use eprintln! first - it doesn't depend on tracing initialization
-    eprintln!("=== APPLICATION STARTING ===");
-    eprintln!("Checking environment variables:");
-    eprintln!("  PORT: {:?}", std::env::var("PORT"));
-    eprintln!("  HOST: {:?}", std::env::var("HOST"));
-    eprintln!("  DATABASE_URL exists: {}", std::env::var("DATABASE_URL").is_ok());
-    eprintln!("  NEO4J_URI exists: {}", std::env::var("NEO4J_URI").is_ok());
-    eprintln!("  QDRANT_URL exists: {}", std::env::var("QDRANT_URL").is_ok());
-    eprintln!("  OPENAI_API_KEY exists: {}", std::env::var("OPENAI_API_KEY").is_ok());
-    
-    // Load .env file first
-    eprintln!("Loading .env file...");
+    // Load .env file
     dotenv::dotenv().ok();
-    eprintln!(".env loaded");
     
     // Initialize tracing
-    eprintln!("Initializing tracing subscriber...");
     tracing_subscriber::fmt::init();
-    eprintln!("Tracing initialized successfully");
     
     tracing::info!("Initializing Project Mirror Backend...");
-    eprintln!("Creating configuration from environment...");
     let config = Config::from_env()?;
-    eprintln!("Configuration loaded successfully");
     tracing::info!("Configuration loaded successfully");
     tracing::info!("Server will listen on port: {}", config.port);
 
-    eprintln!("Creating initialization state...");
     let init_state = Arc::new(RwLock::new(api::InitState::default()));
-    eprintln!("Initialization state created");
 
     // Spawn database initialization as a background task so the HTTP server
     // can bind and pass health checks immediately without waiting for DB setup.
     {
-        eprintln!("Spawning background database initialization task...");
         let config_bg = config.clone();
         let init_state_bg = Arc::clone(&init_state);
         tokio::spawn(async move {
-            eprintln!("Background DB initialization task started");
             tracing::info!("Background DB initialization started");
             match initialize_databases(&config_bg, &init_state_bg).await {
                 Ok(()) => {
-                    eprintln!("Background DB initialization completed successfully");
                     tracing::info!("Background DB initialization completed successfully");
                 },
                 Err(e) => {
-                    eprintln!("Background DB initialization failed: {:#}", e);
                     tracing::error!("Background DB initialization failed: {:#}", e);
                 }
             }
         });
-        eprintln!("Background task spawned");
     }
 
-    eprintln!("Creating application state...");
     let app_state = AppState {
         inner: init_state,
         config: config.clone(),
     };
-    eprintln!("Application state created");
 
-    eprintln!("Building HTTP router...");
     let app = Router::new()
         .route("/health", get(api::health::health_check))
         .route("/api/v1/chat/message", post(api::chat::send_message))
@@ -91,17 +65,13 @@ async fn main() -> Result<()> {
         .route("/api/v1/maintenance/cleanup", post(api::maintenance::cleanup_old_data))
         .layer(CorsLayer::permissive())
         .with_state(app_state);
-    eprintln!("HTTP router built successfully");
 
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
-    eprintln!("Attempting to bind to address: {}", addr);
     tracing::info!("Attempting to bind to address: {}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    eprintln!("Successfully bound to {}", addr);
     tracing::info!("Successfully bound to {}", addr);
     tracing::info!("Project Mirror Backend is now running and accepting connections");
     tracing::info!("Health check available at: http://{}/health", addr);
-    eprintln!("Starting axum server...");
     axum::serve(listener, app).await?;
     Ok(())
 }
