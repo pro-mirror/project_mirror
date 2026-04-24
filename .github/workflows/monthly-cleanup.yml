@@ -2,7 +2,8 @@ name: Monthly Data Cleanup
 
 on:
   schedule:
-    # 毎月1日の午前3時（UTC）に実行 = 日本時間12時
+    # 毎月1日 UTC 3:00に実行 = JST 12:00（正午）
+    # JST深夜3時希望の場合: '0 18 1 * *' = JST 2日 3:00
     - cron: '0 3 1 * *'
   
   # 手動実行を許可
@@ -37,9 +38,9 @@ jobs:
         env:
           BACKEND_URL: ${{ secrets.BACKEND_URL }}
           USER_ID: ${{ inputs.user_id || secrets.CLEANUP_USER_ID || 'default_user' }}
-          DAYS_THRESHOLD: ${{ inputs.days_threshold || '270' }}
-          MIN_DELETION_SCORE: ${{ inputs.min_deletion_score || '40.0' }}
-          LIMIT: ${{ inputs.limit || '100' }}
+          DAYS_THRESHOLD: ${{ inputs.days_threshold || '180' }}
+          MIN_DELETION_SCORE: ${{ inputs.min_deletion_score || '30.0' }}
+          LIMIT: ${{ inputs.limit || '150' }}
         run: |
           chmod +x scripts/cleanup.sh
           ./scripts/cleanup.sh

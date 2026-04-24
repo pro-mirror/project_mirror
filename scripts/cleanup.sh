@@ -8,9 +8,9 @@ set -e  # Exit on error
 # Configuration
 BACKEND_URL="${BACKEND_URL:-http://localhost:8080}"
 USER_ID="${USER_ID:-default_user}"
-DAYS_THRESHOLD="${DAYS_THRESHOLD:-270}"
-MIN_DELETION_SCORE="${MIN_DELETION_SCORE:-40.0}"
-LIMIT="${LIMIT:-100}"
+DAYS_THRESHOLD="${DAYS_THRESHOLD:-180}"
+MIN_DELETION_SCORE="${MIN_DELETION_SCORE:-30.0}"
+LIMIT="${LIMIT:-150}"
 
 echo "Starting monthly data cleanup..."
 echo "Backend URL: $BACKEND_URL"

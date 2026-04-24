@@ -18,7 +18,7 @@ pub struct CleanupRequest {
     pub limit: i64,
 }
 
-fn default_days_threshold() -> i64 { 180 }  // 9 months
+fn default_days_threshold() -> i64 { 180 }  // 6 months
 fn default_min_deletion_score() -> f64 { 30.0 }
 fn default_limit() -> i64 { 150 }
 
