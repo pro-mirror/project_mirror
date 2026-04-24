@@ -34,16 +34,14 @@ numReplicas = 1
 # ---------------------------------------------------------------------------
 
 [environments.production.variables]
-# Server
-HOST = "0.0.0.0"
-PORT = "8080"
+# Logging level（平常時は info、デバッグ時は debug に設定することを推奨）
+# RUST_LOG = "info"
 RUST_LOG = "debug,project_mirror_backend=debug"
 
-# Neo4j — non-sensitive defaults; override secrets in the Railway dashboard
-NEO4J_USER = "0c0c6d20"
-NEO4J_DATABASE = "0c0c6d20"
-
-# The following variables must be set as Railway secret variables:
+# The following variables must be set as Railway dashboard variables:
+#   HOST (default: 0.0.0.0)
+#   NEO4J_USER
+#   NEO4J_DATABASE
 #   OPENAI_API_KEY
 #   QDRANT_URL
 #   QDRANT_API_KEY
