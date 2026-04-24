@@ -16,13 +16,6 @@ numReplicas = 1
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
 
-[deploy.variables]
-HOST = "0.0.0.0"
-PORT = "8080"
-RUST_LOG = "debug,project_mirror_backend=debug"
-NEO4J_USER = "0c0c6d20"
-NEO4J_DATABASE = "0c0c6d20"
-
 [[deploy.domains]]
 domain = "projectmirror-production.up.railway.app"
 
@@ -56,4 +49,4 @@ NEO4J_DATABASE = "0c0c6d20"
 #   QDRANT_API_KEY
 #   NEO4J_URI
 #   NEO4J_PASSWORD
-#   DATABASE_PUBLIC_URL
+#   DATABASE_URL (use private endpoint: ${{Postgres.DATABASE_PRIVATE_URL}})

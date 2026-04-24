@@ -22,7 +22,7 @@ async fn main() -> Result<()> {
     eprintln!("Checking environment variables:");
     eprintln!("  PORT: {:?}", std::env::var("PORT"));
     eprintln!("  HOST: {:?}", std::env::var("HOST"));
-    eprintln!("  DATABASE_PUBLIC_URL exists: {}", std::env::var("DATABASE_PUBLIC_URL").is_ok());
+    eprintln!("  DATABASE_URL exists: {}", std::env::var("DATABASE_URL").is_ok());
     eprintln!("  NEO4J_URI exists: {}", std::env::var("NEO4J_URI").is_ok());
     eprintln!("  QDRANT_URL exists: {}", std::env::var("QDRANT_URL").is_ok());
     eprintln!("  OPENAI_API_KEY exists: {}", std::env::var("OPENAI_API_KEY").is_ok());
@@ -134,7 +134,7 @@ async fn initialize_databases(config: &Config, init_state: &Arc<RwLock<api::Init
     };
     
     tracing::info!("[3/4] Connecting to PostgreSQL...");
-    let pg_pool = match db::postgres::create_pool(&config.database_public_url).await {
+    let pg_pool = match db::postgres::create_pool(&config.database_url).await {
         Ok(pool) => {
             tracing::info!("[3/4] ✓ PostgreSQL connection established");
             pool
